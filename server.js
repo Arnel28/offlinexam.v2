@@ -279,28 +279,58 @@ function shuffleArray(arr) {
 // ─────────────────────────────────────────
 function gradeExam(exam, answers, answerMap) {
     let score = 0;
-    const questions = answerMap || exam.questions.map(q => ({ question: q.question, type: q.type, answer: q.answer }));
+    const questions = answerMap || exam.questions.map(q => ({
+        question: q.question,
+        type: q.type,
+        answer: q.answer,
+        expectedOutput: q.expectedOutput
+    }));
     const gradedAnswers = questions.map((q, i) => {
-        const studentAnswer = (answers[i] !== undefined && answers[i] !== null)
-            ? String(answers[i]).trim() : '';
+        const studentAnswer = answers[i] !== undefined && answers[i] !== null ? answers[i] : null;
         let correct = false;
-        if (q.type === 'identification') {
+
+        if (q.type === 'coding') {
+            // For coding questions, studentAnswer should be { code, output, language }
+            if (studentAnswer && typeof studentAnswer === 'object') {
+                const expected = (q.expectedOutput || '').trim();
+                const actual = (studentAnswer.output || '').trim();
+                correct = actual === expected;
+            } else {
+                correct = false; // No code submitted
+            }
+        } else if (q.type === 'identification') {
             // Support multiple accepted answers (array) or single answer (string)
             const acceptedAnswers = Array.isArray(q.answer)
                 ? q.answer.map(a => String(a).trim().toLowerCase()).filter(a => a !== '')
                 : [String(q.answer).trim().toLowerCase()];
-            correct = acceptedAnswers.includes(studentAnswer.toLowerCase());
+            const studentAnswerStr = String(studentAnswer).trim();
+            correct = acceptedAnswers.includes(studentAnswerStr.toLowerCase());
         } else if (q.type === 'truefalse') {
-            correct = studentAnswer.toLowerCase() === String(q.answer).trim().toLowerCase();
+            correct = String(studentAnswer).trim().toLowerCase() === String(q.answer).trim().toLowerCase();
         } else {
-            correct = studentAnswer === String(q.answer).trim();
+            // MCQ
+            correct = String(studentAnswer).trim() === String(q.answer).trim();
         }
+
         if (correct) score++;
-        // For display: show all accepted answers joined by " / "
-        const correctAnswerDisplay = Array.isArray(q.answer)
-            ? q.answer.filter(a => String(a).trim() !== '').join(' / ')
-            : q.answer;
-        return { question: q.question, type: q.type, studentAnswer, correctAnswer: correctAnswerDisplay, correct };
+
+        // For display
+        let correctAnswerDisplay;
+        if (q.type === 'coding') {
+            correctAnswerDisplay = q.expectedOutput || '';
+        } else {
+            correctAnswerDisplay = Array.isArray(q.answer)
+                ? q.answer.filter(a => String(a).trim() !== '').join(' / ')
+                : q.answer;
+        }
+
+        return {
+            question: q.question,
+            type: q.type,
+            studentAnswer: studentAnswer,
+            correctAnswer: correctAnswerDisplay,
+            correct
+        };
     });
     const totalItems = questions.length;
     const percentage = totalItems > 0 ? Math.round((score / totalItems) * 100) : 0;
@@ -1016,6 +1046,332 @@ app.get('/api/attendance/export/:id', (req, res) => {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.send(buffer);
 });
+
+// ─────────────────────────────────────────
+//  CODE EXECUTION ENGINE (Docker)
+// ─────────────────────────────────────────
+
+const { exec, execSync } = require('child_process');
+const crypto = require('crypto');
+
+// Allowed languages
+const ALLOWED_LANGUAGES = new Set(['javascript', 'python', 'java', 'c', 'cpp', 'csharp', 'sql']);
+
+// Rate limiting: { ip_hourKey: { count, resetAt } }
+const codeExecCounts = new Map();
+const MAX_EXECUTIONS_PER_HOUR = 100;
+
+// Check Docker availability
+let DOCKER_AVAILABLE = false;
+try {
+    execSync('docker --version', { stdio: 'ignore' });
+    DOCKER_AVAILABLE = true;
+    console.log('✅ Docker is available. Code execution enabled.');
+} catch (e) {
+    console.warn('⚠️ Docker not found. Coding questions requiring server-side execution will be disabled.');
+}
+
+// Docker image mappings
+const DOCKER_IMAGES = {
+    javascript: 'node:20-slim',
+    python: 'python:3.11-slim',
+    java: 'openjdk:17-jdk-slim',
+    c: 'gcc:13-alpine',
+    cpp: 'gcc:13-alpine',
+    csharp: 'mcr.microsoft.com/dotnet/sdk:8.0',
+    sql: 'nouchka/sqlite3:latest'
+};
+
+// POST /api/run-code - Execute code in Docker container
+app.post('/api/run-code', async (req, res) => {
+    const { code, language, input = '', examId, questionId, databaseSchema } = req.body;
+
+    // Validation
+    if (!code || !language) {
+        return res.status(400).json({ error: 'Code and language are required.' });
+    }
+
+    if (typeof code !== 'string') {
+        return res.status(400).json({ error: 'Code must be a string.' });
+    }
+
+    if (!ALLOWED_LANGUAGES.has(language)) {
+        return res.status(400).json({ error: 'Unsupported language.' });
+    }
+
+    // JavaScript fallback: if Docker not available, use client-side? Actually we need server-side for consistency
+    // For now, if language is javascript but Docker not available, we can still try? No, need Docker for all
+    if (!DOCKER_AVAILABLE) {
+        return res.status(503).json({ error: 'Code execution is not available on this server. Docker is required.' });
+    }
+
+    // Rate limiting by IP
+    const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
+    const now = Date.now();
+    const hourKey = Math.floor(now / (1000 * 60 * 60)); // Current hour as key
+    const rateKey = `${clientIp}:${hourKey}`;
+    let entry = codeExecCounts.get(rateKey);
+    if (!entry || now > entry.resetAt) {
+        entry = { count: 0, resetAt: (hourKey + 1) * 60 * 60 * 1000 };
+        codeExecCounts.set(rateKey, entry);
+    }
+    if (entry.count >= MAX_EXECUTIONS_PER_HOUR) {
+        return res.status(429).json({ error: 'Rate limit exceeded. Maximum 100 code executions per hour.' });
+    }
+    entry.count++;
+
+    try {
+        const result = await executeCodeInDocker(code, language, input || '', databaseSchema);
+        res.json(result);
+    } catch (err) {
+        console.error('Code execution error:', err);
+        // Determine if it's a user error (compilation/syntax) or system error
+        if (err.message.includes('exit code') || err.message.includes('Error:')) {
+            res.status(200).json({
+                output: '',
+                error: err.message,
+                exitCode: 1,
+                timedOut: false
+            });
+        } else {
+            res.status(500).json({
+                error: 'Execution failed',
+                details: err.message
+            });
+        }
+    }
+});
+
+async function executeCodeInDocker(code, language, input, databaseSchema) {
+    const execId = crypto.randomBytes(8).toString('hex');
+    const os = require('os');
+    const hostTmpDir = process.env.CODE_EXEC_DIR || path.join(os.tmpdir(), 'code-exec');
+    const workDir = path.join(hostTmpDir, execId);
+
+    try {
+        // Ensure host tmp dir exists
+        fs.mkdirSync(hostTmpDir, { recursive: true });
+        fs.mkdirSync(workDir, { recursive: true });
+
+        let config;
+        switch (language) {
+            case 'javascript':
+                config = getJavaScriptConfig(code, input);
+                break;
+            case 'python':
+                config = getPythonConfig(code, input);
+                break;
+            case 'java':
+                config = getJavaConfig(code, input);
+                break;
+            case 'c':
+                config = getCConfig(code, input);
+                break;
+            case 'cpp':
+                config = getCppConfig(code, input);
+                break;
+            case 'csharp':
+                config = getCSharpConfig(code, input);
+                break;
+            case 'sql':
+                config = getSqlConfig(code, input, databaseSchema);
+                break;
+            default:
+                throw new Error(`Unsupported language: ${language}`);
+        }
+
+        // Pre-pull image if needed (async, don't wait)
+        ensureDockerImage(config.image).catch(err => {
+            console.warn(`Failed to pull ${config.image}:`, err.message);
+        });
+
+        // Run container
+        const result = await runDockerContainer(workDir, config);
+        return result;
+
+    } finally {
+        // Cleanup
+        try {
+            if (fs.existsSync(workDir)) {
+                fs.rmSync(workDir, { recursive: true, force: true });
+            }
+        } catch (e) {
+            console.warn('Cleanup failed:', e.message);
+        }
+    }
+}
+
+function getJavaScriptConfig(code, input) {
+    return {
+        language: 'javascript',
+        image: DOCKER_IMAGES.javascript,
+        filename: 'main.js',
+        command: ['node', 'main.js'],
+        input: input,
+        code: code
+    };
+}
+
+function getPythonConfig(code, input) {
+    return {
+        language: 'python',
+        image: DOCKER_IMAGES.python,
+        filename: 'main.py',
+        command: ['python', 'main.py'],
+        input: input,
+        code: code
+    };
+}
+
+function getJavaConfig(code, input) {
+    // Ensure code defines a public class named Main
+    return {
+        language: 'java',
+        image: DOCKER_IMAGES.java,
+        filename: 'Main.java',
+        command: ['sh', '-c', 'javac Main.java && java Main'],
+        input: input,
+        code: code
+    };
+}
+
+function getCConfig(code, input) {
+    return {
+        language: 'c',
+        image: DOCKER_IMAGES.c,
+        filename: 'main.c',
+        command: ['sh', '-c', 'gcc main.c -o main -O2 && ./main'],
+        input: input,
+        code: code
+    };
+}
+
+function getCppConfig(code, input) {
+    return {
+        language: 'cpp',
+        image: DOCKER_IMAGES.cpp,
+        filename: 'main.cpp',
+        command: ['sh', '-c', 'g++ main.cpp -o main -O2 && ./main'],
+        input: input,
+        code: code
+    };
+}
+
+function getCSharpConfig(code, input) {
+    // C#: Use dotnet SDK. Create a console project, copy code, run.
+    return {
+        language: 'csharp',
+        image: DOCKER_IMAGES.csharp,
+        filename: 'Program.cs',
+        command: ['sh', '-c', 'dotnet new console -n App --force && mv Program.cs App/Program.cs && dotnet run --project App --no-build'],
+        input: input,
+        code: code,
+        workdir: '/workspace'
+    };
+}
+
+function getSqlConfig(code, input, databaseSchema) {
+    // For SQL: code contains SQL queries. We need a database file.
+    // If databaseSchema is provided, we'll initialize the DB first (init.sql)
+    return {
+        language: 'sql',
+        image: DOCKER_IMAGES.sql,
+        filename: 'queries.sql',
+        command: null, // will construct dynamically
+        input: input,
+        code: code,
+        databaseSchema: databaseSchema || ''
+    };
+}
+
+async function ensureDockerImage(image) {
+    // Check if image exists locally; if not, pull it
+    return new Promise((resolve, reject) => {
+        exec(`docker images -q ${image}`, (err, stdout, stderr) => {
+            if (stdout && stdout.trim()) {
+                // Image exists
+                return resolve();
+            }
+            // Pull image
+            console.log(`Pulling Docker image: ${image}...`);
+            exec(`docker pull ${image}`, (pullErr, stdout, stderr) => {
+                if (pullErr) {
+                    reject(new Error(`Failed to pull image ${image}: ${pullErr.message}`));
+                } else {
+                    console.log(`Pulled ${image}`);
+                    resolve();
+                }
+            });
+        });
+    });
+}
+
+async function runDockerContainer(workDir, config) {
+    const { image, filename, command, input, code, language } = config;
+
+    // Write code file
+    fs.writeFileSync(path.join(workDir, filename), code);
+
+    // For SQL: if databaseSchema provided, write init.sql to set up the database
+    if (language === 'sql' && config.databaseSchema) {
+        fs.writeFileSync(path.join(workDir, 'init.sql'), config.databaseSchema);
+    }
+
+    // Build docker command as a single string for exec
+    let dockerCmd = `docker run --rm --network none --cpus 1 --memory 256m --pids-limit 100 --user 1000:1000 -v "${workDir}:/workspace" -w /workspace`;
+
+    if (config.workdir) {
+        dockerCmd += ` -w ${config.workdir}`;
+    }
+
+    dockerCmd += ` ${image}`;
+
+    // Special handling for SQL with schema
+    if (language === 'sql' && config.databaseSchema) {
+        // Use shell to init DB if init.sql exists, then run queries
+        dockerCmd += ' sh -c "if [ -f init.sql ]; then sqlite3 database.db < init.sql; fi; sqlite3 database.db < queries.sql"';
+    } else if (command) {
+        if (Array.isArray(command)) {
+            dockerCmd += ' ' + command.map(arg => `"${arg}"`).join(' ');
+        } else {
+            dockerCmd += ' ' + command;
+        }
+    } else {
+        // Default: run the filename directly (e.g., node main.js)
+        dockerCmd += ' ' + filename;
+    }
+
+    return new Promise((resolve, reject) => {
+        const child = exec(dockerCmd, { maxBuffer: 1024 * 1024, timeout: 6000 }, (error, stdout, stderr) => {
+            const result = {
+                output: stdout.toString().trim(),
+                error: stderr.toString().trim(),
+                exitCode: error ? (error.code || 1) : 0,
+                timedOut: false
+            };
+            if (error && error.killed) {
+                result.timedOut = true;
+                result.error = 'Execution timed out (5 seconds)';
+            }
+            resolve(result);
+        });
+
+        // Provide stdin if any
+        if (input && child.stdin) {
+            setTimeout(() => {
+                child.stdin.write(input);
+                child.stdin.end();
+            }, 100);
+        }
+
+        // Ensure cleanup
+        setTimeout(() => {
+            if (!child.killed) {
+                child.kill('SIGKILL');
+            }
+        }, 6000);
+    });
+}
 
 // ─────────────────────────────────────────
 //  START SERVER

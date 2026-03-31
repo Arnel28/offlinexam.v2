@@ -48,6 +48,89 @@ async function fetchServerInfo() {
   }
 }
 
+// Run coding question code and check output
+async function runStudentCode(qi) {
+  var codeEl = document.getElementById('code-' + qi);
+  var outputEl = document.getElementById('output-' + qi);
+  var matchEl = document.getElementById('match-' + qi);
+  if (!codeEl || !outputEl) return;
+
+  var code = codeEl.value;
+  var q = examData.questions[qi];
+  var input = document.getElementById('input-' + qi) ? document.getElementById('input-' + qi).value : '';
+
+  outputEl.textContent = '⏳ Running...';
+  outputEl.style.color = '#64748b';
+  outputEl.style.background = '#f1f5f9';
+  if (matchEl) matchEl.textContent = '';
+
+  // Build request body; include databaseSchema for SQL
+  var body = {
+    code: code,
+    language: q.language,
+    input: input,
+    examId: examData.id,
+    questionId: qi
+  };
+  if (q.language === 'sql' && q.databaseSchema) {
+    body.databaseSchema = q.databaseSchema;
+  }
+
+  try {
+    var resp = await fetch('/api/run-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var data = await resp.json();
+
+    if (data.error) {
+      outputEl.textContent = '❌ ' + data.error;
+      outputEl.style.color = '#dc2626';
+      outputEl.style.background = '#fef2f2';
+      if (matchEl) matchEl.textContent = '❌';
+      if (matchEl) matchEl.style.color = '#dc2626';
+      // Store failed execution as answer? Not yet
+      answers[qi] = { code: code, output: '', error: data.error, language: q.language };
+    } else {
+      outputEl.textContent = data.output || '(no output)';
+      outputEl.style.color = '#1e293b';
+      outputEl.style.background = '#1e293b';
+
+      var expected = (q.expectedOutput || '').trim();
+      var actual = (data.output || '').trim();
+      var isMatch = actual === expected;
+
+      if (matchEl) {
+        matchEl.textContent = isMatch ? '✅ Matches expected output!' : '⚠️ Does not match expected output';
+        matchEl.style.color = isMatch ? '#16a34a' : '#d97706';
+      }
+
+      // Store the result as the answer
+      answers[qi] = {
+        code: code,
+        output: data.output,
+        language: q.language,
+        error: data.error || null
+      };
+
+      // If one-by-one mode, update next button state
+      if (isOneByOneMode && isExamActive) {
+        updateOboNextButton();
+      }
+
+      updateProgress();
+      updateCardState(qi);
+    }
+  } catch (err) {
+    outputEl.textContent = '❌ Network error: ' + err.message;
+    outputEl.style.color = '#dc2626';
+    outputEl.style.background = '#fef2f2';
+    if (matchEl) matchEl.textContent = '❌';
+    if (matchEl) matchEl.style.color = '#dc2626';
+  }
+}
+
 // ─────────────────────────────────────────
 //  AGREEMENT CHECKBOX — ENABLE START BUTTON
 // ─────────────────────────────────────────
@@ -480,10 +563,32 @@ function oboSelectTF(qi, val) {
   updateOboAnsweredBadge(qi);
 }
 
+// Check if a coding question answer matches expected output
+function isCodingAnswerCorrect(i) {
+  var ans = answers[i];
+  var q = examData.questions[i];
+  if (!q || q.type !== 'coding') return true; // not a coding question
+  if (!ans || typeof ans !== 'object') return false;
+  if (!q.expectedOutput) return true; // no expected output set (should not happen)
+  var expected = (q.expectedOutput || '').trim();
+  var actual = (ans.output || '').trim();
+  return actual === expected;
+}
+
 // Update the "answered / not answered" badge and enable/disable Next/Submit
 function updateOboAnsweredBadge(i) {
   var ans = answers[i];
-  var hasAnswer = ans !== undefined && ans !== null && String(ans).trim() !== '';
+  var q = examData.questions[i];
+  var isCoding = q && q.type === 'coding';
+  var hasAnswer;
+
+  if (isCoding) {
+    // For coding, answer exists and output matches expected
+    hasAnswer = ans !== undefined && ans !== null && isCodingAnswerCorrect(i);
+  } else {
+    hasAnswer = ans !== undefined && ans !== null && String(ans).trim() !== '';
+  }
+
   var badge     = document.getElementById('oboAnsweredBadge');
   var nextBtn   = document.getElementById('oboNextBtn');
   var submitBtn = document.getElementById('oboSubmitBtn');
@@ -554,8 +659,18 @@ function advanceOboQuestion() {
 // Called by the "Next →" button — only advances if the student has answered
 function nextOboQuestion() {
   if (!isExamActive || hasSubmitted) return;
-  var ans = answers[currentOboIndex];
-  var hasAnswer = ans !== undefined && ans !== null && String(ans).trim() !== '';
+  var qi = currentOboIndex;
+  var ans = answers[qi];
+  var q = examData.questions[qi];
+  var isCoding = q && q.type === 'coding';
+  var hasAnswer;
+
+  if (isCoding) {
+    hasAnswer = ans !== undefined && ans !== null && isCodingAnswerCorrect(qi);
+  } else {
+    hasAnswer = ans !== undefined && ans !== null && String(ans).trim() !== '';
+  }
+
   if (!hasAnswer) return; // safety check (button should already be disabled)
   advanceOboQuestion();
 }
@@ -620,6 +735,64 @@ function buildAnswerElement(q, i) {
     falseBtn.addEventListener('click', function () { selectTF(i, 'False'); });
     wrap.appendChild(trueBtn);
     wrap.appendChild(falseBtn);
+
+  } else if (q.type === 'coding') {
+    wrap.className = 'coding-answer';
+    wrap.style.cssText = 'display:flex;flex-direction:column;gap:12px';
+
+    // Language label
+    var langLabel = document.createElement('div');
+    langLabel.style.cssText = 'font-size:.85rem;color:#64748b;font-weight:600';
+    langLabel.textContent = 'Language: ' + (q.language || 'javascript');
+    wrap.appendChild(langLabel);
+
+    // Code editor (textarea)
+    var codeTA = document.createElement('textarea');
+    codeTA.rows = 10;
+    codeTA.value = q.codeTemplate || '';
+    codeTA.placeholder = '// Write your code here...';
+    codeTA.style.cssText = 'font-family:Consolas,Monaco,monospace;font-size:14px;padding:12px;border:1.5px solid #cbd5e1;border-radius:8px;background:#1e293b;color:#e2e8f0;resize:vertical;width:100%';
+    codeTA.id = 'code-' + i;
+    wrap.appendChild(codeTA);
+
+    // Input (stdin) if provided
+    if (q.input || q.language === 'sql') {
+      var inputLabel = document.createElement('label');
+      inputLabel.style.cssText = 'font-size:.85rem;font-weight:600;color:#334155';
+      inputLabel.textContent = 'Input (stdin)';
+      wrap.appendChild(inputLabel);
+      var inputTA = document.createElement('textarea');
+      inputTA.rows = 2;
+      inputTA.value = q.input || '';
+      inputTA.placeholder = 'Enter input data (if required)';
+      inputTA.style.cssText = 'width:100%;padding:10px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:monospace';
+      inputTA.id = 'input-' + i;
+      wrap.appendChild(inputTA);
+    }
+
+    // Run button
+    var runBtn = document.createElement('button');
+    runBtn.type = 'button';
+    runBtn.textContent = '▶ Run Code';
+    runBtn.style.cssText = 'align-self:flex-start;padding:10px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600';
+    runBtn.setAttribute('data-qi', i);
+    runBtn.addEventListener('click', function() {
+      runStudentCode(parseInt(this.getAttribute('data-qi')));
+    });
+    wrap.appendChild(runBtn);
+
+    // Output area
+    var outputPre = document.createElement('pre');
+    outputPre.id = 'output-' + i;
+    outputPre.style.cssText = 'background:#1e293b;color:#22c55e;padding:12px;border-radius:8px;margin-top:8px;font-family:monospace;font-size:13px;min-height:60px;overflow-x:auto;width:100%;box-sizing:border-box';
+    outputPre.textContent = 'Output will appear here...';
+    wrap.appendChild(outputPre);
+
+    // Expected output hint
+    var expDiv = document.createElement('div');
+    expDiv.style.cssText = 'font-size:.85rem;color:#64748b;margin-top:4px';
+    expDiv.innerHTML = 'Expected: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;color:#1e293b">' + escHtml(q.expectedOutput) + '</code> <span id="match-' + i + '" style="margin-left:8px;font-weight:600"></span>';
+    wrap.appendChild(expDiv);
 
   } else {
     var inp = document.createElement('input');
@@ -919,7 +1092,25 @@ function buildAnswersArray() {
   var arr = [];
   if (examData) {
     for (var i = 0; i < examData.questions.length; i++) {
-      arr.push(answers[i] !== undefined ? answers[i] : '');
+      var q = examData.questions[i];
+      var ans = answers[i];
+      if (ans !== undefined && ans !== null) {
+        arr.push(ans);
+      } else if (q.type === 'coding') {
+        // For coding questions, if not explicitly stored (student didn't click Run), capture from textarea
+        var codeEl = document.getElementById('code-' + i);
+        if (codeEl && codeEl.value.trim()) {
+          arr.push({
+            code: codeEl.value,
+            output: '',
+            language: q.language
+          });
+        } else {
+          arr.push('');
+        }
+      } else {
+        arr.push('');
+      }
     }
   }
   return arr;

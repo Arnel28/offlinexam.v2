@@ -319,7 +319,25 @@ function viewExamResults(id) {
 function addQuestion(type) {
   // Identification uses an array of accepted answers; others use a string
   var defaultAnswer = type === 'identification' ? [''] : '';
-  questions.push({ type: type, question: '', answer: defaultAnswer, options: type === 'mcq' ? ['', '', '', ''] : null });
+  var question = {
+    type: type,
+    question: '',
+    answer: defaultAnswer,
+    options: type === 'mcq' ? ['', '', '', ''] : null
+  };
+
+  // Coding questions have extra fields
+  if (type === 'coding') {
+    question.codeTemplate = '// Write your code here\n';
+    question.language = 'javascript';
+    question.expectedOutput = '';
+    question.input = '';
+    question.langHelp = '';
+    // For SQL: optional database schema/seed
+    question.databaseSchema = '';
+  }
+
+  questions.push(question);
   renderQuestions();
 }
 
@@ -331,6 +349,63 @@ function removeQuestion(idx) {
 function setQuestionText(idx, val) { questions[idx].question = val; }
 function setAnswer(idx, val) { questions[idx].answer = val; }
 function setOption(idx, oi, val) { questions[idx].options[oi] = val; }
+
+// Test a coding question's code against expected output
+async function testCodingQuestion(idx) {
+  var q = questions[idx];
+  if (!q.codeTemplate) {
+    showToast('Please enter code in the template.', 'error');
+    return;
+  }
+  var resultDiv = document.getElementById('coding-test-' + idx);
+  var outputEl = document.getElementById('test-output-' + idx);
+  var matchEl = document.getElementById('test-match-' + idx);
+  if (!resultDiv || !outputEl) return;
+
+  resultDiv.style.display = 'block';
+  outputEl.textContent = '⏳ Running...';
+  if (matchEl) matchEl.textContent = '';
+
+  try {
+    var resp = await fetch('/api/run-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: q.codeTemplate,
+        language: q.language,
+        input: q.input || '',
+        examId: 'test',
+        questionId: idx
+      })
+    });
+    var data = await resp.json();
+
+    if (data.error) {
+      outputEl.textContent = '❌ ' + data.error;
+      outputEl.style.color = '#dc2626';
+      outputEl.style.background = '#fef2f2';
+      if (matchEl) matchEl.textContent = '❌ Failed to run';
+    } else {
+      outputEl.textContent = data.output || '(no output)';
+      outputEl.style.color = '#1e293b';
+      outputEl.style.background = '#1e293b';
+
+      var expected = (q.expectedOutput || '').trim();
+      var actual = (data.output || '').trim();
+      var isMatch = actual === expected;
+
+      if (matchEl) {
+        matchEl.textContent = isMatch ? '✅ Output matches expected!' : '⚠️ Output does not match expected';
+        matchEl.style.color = isMatch ? '#16a34a' : '#d97706';
+      }
+    }
+  } catch (err) {
+    outputEl.textContent = '❌ Network error: ' + err.message;
+    outputEl.style.color = '#dc2626';
+    outputEl.style.background = '#fef2f2';
+    if (matchEl) matchEl.textContent = '❌';
+  }
+}
 
 function renderQuestions() {
   var container = document.getElementById('questionsContainer');
@@ -487,6 +562,128 @@ function renderQuestions() {
       idGroup.appendChild(answersContainer);
       renderIdAnswers(i, answersContainer);
       div.appendChild(idGroup);
+    } else if (q.type === 'coding') {
+      // ── CODING QUESTION FIELDS ──
+      var codingGroup = document.createElement('div');
+      codingGroup.style.cssText = 'background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:10px; padding:16px; margin-top:12px';
+
+      // Language selector
+      var langRow = document.createElement('div');
+      langRow.style.cssText = 'display:flex; gap:12px; margin-bottom:12px';
+      langRow.innerHTML = '<label style="font-size:.85rem;font-weight:600;color:#334155;min-width:80px">Language</label>' +
+        '<select data-idx-lang="' + i + '" style="flex:1;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.9rem;">' +
+        ['<option value="javascript">JavaScript</option>',
+         '<option value="python">Python</option>',
+         '<option value="java">Java</option>',
+         '<option value="c">C</option>',
+         '<option value="cpp">C++</option>',
+         '<option value="csharp">C#</option>',
+         '<option value="sql">SQL</option>'].join('') +
+        '</select>';
+      langRow.querySelector('select').value = q.language || 'javascript';
+      langRow.querySelector('select').addEventListener('change', function() {
+        var idx = parseInt(this.getAttribute('data-idx-lang'));
+        questions[idx].language = this.value;
+        // Show/hide SQL schema field
+        var schemaRow = document.getElementById('sql-schema-' + idx);
+        if (schemaRow) schemaRow.style.display = (this.value === 'sql') ? 'block' : 'none';
+      });
+      codingGroup.appendChild(langRow);
+
+      // Code template
+      var codeGroup = document.createElement('div');
+      codeGroup.className = 'form-group';
+      codeGroup.innerHTML = '<label>Code Template (starting code for students)</label>';
+      var codeTA = document.createElement('textarea');
+      codeTA.rows = 8;
+      codeTA.value = q.codeTemplate || '';
+      codeTA.style.cssText = 'font-family:Consolas,Monaco,monospace; font-size:14px; width:100%; padding:10px; border:1.5px solid #cbd5e1; border-radius:8px; background:#1e293b; color:#e2e8f0; resize:vertical';
+      codeTA.setAttribute('data-idx-code', i);
+      codeTA.addEventListener('input', function() {
+        questions[parseInt(this.getAttribute('data-idx-code'))].codeTemplate = this.value;
+      });
+      codeGroup.appendChild(codeTA);
+      codingGroup.appendChild(codeGroup);
+
+      // Input (stdin)
+      var inputGroup = document.createElement('div');
+      inputGroup.className = 'form-group';
+      inputGroup.innerHTML = '<label>Input (stdin) — optional</label>';
+      var inputTA = document.createElement('textarea');
+      inputTA.rows = 2;
+      inputTA.value = q.input || '';
+      inputTA.placeholder = 'Standard input for the program, e.g., "2 3" or "Hello"';
+      inputTA.style.cssText = 'width:100%; padding:10px; border:1.5px solid #e2e8f0; border-radius:8px; font-family:monospace';
+      inputTA.setAttribute('data-idx-input', i);
+      inputTA.addEventListener('input', function() {
+        questions[parseInt(this.getAttribute('data-idx-input'))].input = this.value;
+      });
+      inputGroup.appendChild(inputTA);
+      codingGroup.appendChild(inputGroup);
+
+      // Expected output
+      var expGroup = document.createElement('div');
+      expGroup.className = 'form-group';
+      expGroup.innerHTML = '<label>Expected Output * (exact match required)</label>';
+      var expInput = document.createElement('input');
+      expInput.type = 'text';
+      expInput.value = q.expectedOutput || '';
+      expInput.placeholder = 'What the program should print';
+      expInput.style.cssText = 'width:100%; padding:10px; border:1.5px solid #e2e8f0; border-radius:8px';
+      expInput.setAttribute('data-idx-exp', i);
+      expInput.addEventListener('input', function() {
+        questions[parseInt(this.getAttribute('data-idx-exp'))].expectedOutput = this.value;
+      });
+      expGroup.appendChild(expInput);
+      codingGroup.appendChild(expGroup);
+
+      // Language-specific help (optional)
+      var helpGroup = document.createElement('div');
+      helpGroup.className = 'form-group';
+      helpGroup.innerHTML = '<label>Language-Specific Instructions (optional)</label>';
+      var helpTA = document.createElement('textarea');
+      helpTA.rows = 2;
+      helpTA.value = q.langHelp || '';
+      helpTA.placeholder = 'e.g., "Implement a function called add() that takes two parameters and returns the sum"';
+      helpTA.style.cssText = 'width:100%; padding:10px; border:1.5px solid #e2e8f0; border-radius:8px; font-size:.9rem';
+      helpTA.setAttribute('data-idx-help', i);
+      helpTA.addEventListener('input', function() {
+        questions[parseInt(this.getAttribute('data-idx-help'))].langHelp = this.value;
+      });
+      helpGroup.appendChild(helpTA);
+      codingGroup.appendChild(helpGroup);
+
+      // Test code button
+      var testBtn = document.createElement('button');
+      testBtn.type = 'button';
+      testBtn.textContent = '🧪 Test Code';
+      testBtn.style.cssText = 'padding:10px 20px; background:#7c3aed; color:#fff; border:none; border-radius:8px; cursor:pointer; font-weight:600; margin-top:8px';
+      testBtn.setAttribute('data-idx-test', i);
+      testBtn.addEventListener('click', function() {
+        testCodingQuestion(parseInt(this.getAttribute('data-idx-test')));
+      });
+      codingGroup.appendChild(testBtn);
+
+      // Test result area
+      var testResult = document.createElement('div');
+      testResult.id = 'coding-test-' + i;
+      testResult.style.cssText = 'margin-top:10px; padding:10px; background:#f1f5f9; border-radius:8px; display:none';
+      testResult.innerHTML = '<div style="font-weight:600; margin-bottom:6px;">Test Result</div><pre id="test-output-' + i + '" style="background:#1e293b; color:#22c55e; padding:10px; border-radius:6px; margin:0; font-family:monospace; font-size:13px; max-height:200px; overflow:auto"></pre><div id="test-match-' + i + '" style="margin-top:6px; font-size:.9rem;"></div>';
+      codingGroup.appendChild(testResult);
+
+      // SQL: Database schema (shown only for SQL)
+      var sqlSchema = document.createElement('div');
+      sqlSchema.id = 'sql-schema-' + i;
+      sqlSchema.style.cssText = 'margin-top:12px; display:' + (q.language === 'sql' ? 'block' : 'none');
+      sqlSchema.innerHTML = '<label style="display:block;font-size:.85rem;font-weight:600;color:#334155;margin-bottom:6px">Database Schema & Seed Data <span style="font-weight:400;color:#64748b">(for SQL questions)</span></label>' +
+        '<textarea data-idx-sql="' + i + '" rows="4" style="width:100%; font-family:monospace; font-size:13px; padding:10px; border:1.5px solid #93c5fd; border-radius:8px; background:#f0f9ff; color:#1e40af" placeholder="CREATE TABLE students (id INTEGER, name TEXT, grade INTEGER);\nINSERT INTO students VALUES (1, \'Alice\', 95);">' + (q.databaseSchema || '') + '</textarea>' +
+        '<div style="font-size:.82rem;color:#64748b;margin-top:4px">Define tables and seed data. The database will be reset for each test run.</div>';
+      sqlSchema.querySelector('textarea').addEventListener('input', function() {
+        questions[parseInt(this.getAttribute('data-idx-sql'))].databaseSchema = this.value;
+      });
+      codingGroup.appendChild(sqlSchema);
+
+      div.appendChild(codingGroup);
     }
 
     container.appendChild(div);
@@ -521,7 +718,13 @@ function saveExam() {
   for (var i = 0; i < questions.length; i++) {
     var q = questions[i];
     if (!q.question.trim()) { showToast('Question ' + (i + 1) + ' has no text.', 'error'); return; }
-    if (!q.answer) { showToast('Question ' + (i + 1) + ': set the correct answer.', 'error'); return; }
+    if (q.type === 'coding') {
+      if (!q.codeTemplate || !q.codeTemplate.trim()) { showToast('Question ' + (i + 1) + ': Code template is required.', 'error'); return; }
+      if (!q.expectedOutput || !q.expectedOutput.trim()) { showToast('Question ' + (i + 1) + ': Expected output is required.', 'error'); return; }
+      if (!q.language) { showToast('Question ' + (i + 1) + ': Language must be selected.', 'error'); return; }
+    } else if (!q.answer) {
+      showToast('Question ' + (i + 1) + ': set the correct answer.', 'error'); return;
+    }
     if (q.type === 'mcq') {
       for (var oi = 0; oi < 4; oi++) {
         if (!q.options[oi] || !q.options[oi].trim()) {
