@@ -488,7 +488,7 @@ function renderQuestions() {
       tfSel.addEventListener('change', function() { setAnswer(parseInt(this.getAttribute('data-idx')), this.value); });
       tfGroup.appendChild(tfSel);
       div.appendChild(tfGroup);
-    } else {
+    } else if (q.type === 'identification') {
       // ── IDENTIFICATION: multiple accepted answers ──
       var idGroup = document.createElement('div');
       idGroup.className = 'form-group';
