@@ -1,0 +1,582 @@
+0<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Teacher Dashboard — Offline Exam System</title>
+<link rel="stylesheet" href="/teacher/teacher.css"/>
+<style>
+  .login-screen {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  }
+  .login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-box h1 {
+    text-align: center;
+    margin-bottom: 8px;
+    color: #1e293b;
+  }
+  .login-box .subtitle {
+    text-align: center;
+    color: #64748b;
+    margin-bottom: 30px;
+  }
+  .login-box input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    font-size: 1rem;
+    margin-bottom: 16px;
+    box-sizing: border-box;
+  }
+  .login-box input:focus {
+    outline: none;
+    border-color: #3b82f6;
+  }
+  .login-box button {
+    width: 100%;
+    padding: 14px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .login-box button:hover {
+    background: #2563eb;
+  }
+  .login-box .error {
+    color: #ef4444;
+    text-align: center;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .app-shell {
+    display: none;
+  }
+  .app-shell.active {
+    display: flex;
+  }
+  .settings-panel {
+    background: #f8fafc;
+    padding: 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+  }
+  .settings-panel h4 {
+    margin: 0 0 12px 0;
+    color: #334155;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <h1>🔐 Teacher Login</h1>
+    <p class="subtitle">Enter your password to access the dashboard</p>
+    <div class="error" id="loginError">Invalid password. Please try again.</div>
+    <input type="password" id="teacherPassword" placeholder="Enter teacher password" />
+    <button onclick="login()">Login</button>
+    <p style="text-align:center;margin-top:20px;color:#94a3b8;font-size:0.85rem">
+      Default password: <code style="background:#f1f5f9;padding:2px 8px;border-radius:4px">teacher123</code>
+    </p>
+  </div>
+</div>
+
+<div class="app-shell" id="appShell">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">📋</span>
+      <div>
+        <div class="logo-title">ExamSystem</div>
+        <div class="logo-sub">Teacher Dashboard</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="tab-btn active" id="tab-exams" onclick="switchTab('exams')">
+        <span class="tab-icon">📚</span> My Exams
+      </button>
+      <button class="tab-btn" id="tab-builder" onclick="switchTab('builder')">
+        <span class="tab-icon">📝</span> Exam Builder
+      </button>
+      <button class="tab-btn" id="tab-results" onclick="switchTab('results')">
+        <span class="tab-icon">📊</span> Results
+      </button>
+      <button class="tab-btn" id="tab-violations" onclick="switchTab('violations')">
+        <span class="tab-icon">🟢</span> Live
+        <span id="violationBadge" style="display:none;background:#dc2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:.72rem;font-weight:800;margin-left:auto">0</span>
+      </button>
+      <button class="tab-btn" id="tab-attendance" onclick="switchTab('attendance')">
+        <span class="tab-icon">📋</span> Attendance
+      </button>
+      <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">
+        <span class="tab-icon">⚙️</span> Settings
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="ip-badge" id="ipBadge">📡 Loading...</div>
+      <div style="font-size:.72rem;color:#94a3b8;margin-top:6px;text-align:center">Share this IP with students</div>
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ── -->
+  <main class="main-content">
+
+    <!-- ══ TAB: MY EXAMS ══ -->
+    <div class="tab-panel active" id="panel-exams">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">My Exams</h2>
+          <p class="panel-sub">Each exam title is the student's access code</p>
+        </div>
+        <button class="btn btn-primary" onclick="newExam()">＋ Create New Exam</button>
+      </div>
+
+
+      <div id="examsList">
+        <div class="empty-state">
+          <div class="empty-icon">📚</div>
+          <div>No exams yet. Click <strong>Create New Exam</strong> to get started.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: EXAM BUILDER ══ -->
+    <div class="tab-panel" id="panel-builder">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title" id="builderTitle">Create New Exam</h2>
+          <p class="panel-sub" id="builderSub">Fill in the details and add questions below</p>
+        </div>
+        <button class="btn btn-outline" onclick="switchTab('exams')">← Back to Exams</button>
+      </div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label>Exam Title / Code *</label>
+            <input type="text" id="examTitle" placeholder="e.g. ITNET-MIDTERM (students will type this as the code)"/>
+            <div class="field-hint">⚠️ This title is the exam code students will enter. Make it simple and memorable.</div>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Time Limit (minutes) *</label>
+            <input type="number" id="examTime" value="60" min="1" max="300"/>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:16px">
+          <div class="form-group" style="flex:2">
+            <label>Maximum Students (optional)</label>
+            <input type="number" id="examMaxStudents" value="0" min="0" max="1000" placeholder="0 = no limit"/>
+            <div class="field-hint">Set a limit to prevent more than X students from taking this exam. Leave as 0 for no limit.</div>
+          </div>
+          <div class="form-group" style="flex:1;display:flex;align-items:flex-end">
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;width:100%">
+              <div style="font-size:0.75rem;color:#166534;text-transform:uppercase;font-weight:600">Current Usage</div>
+              <div id="currentUsageDisplay" style="font-size:1.5rem;font-weight:700;color:#15803d">0 / 0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── QUESTION DISPLAY MODE ── -->
+        <div class="form-row" style="margin-top:16px">
+          <div class="form-group" style="flex:2">
+            <label>Question Display Mode</label>
+            <select id="examQuestionMode" onchange="toggleQuestionMode()" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.9rem;font-family:inherit;color:#1e293b;background:#fff;cursor:pointer">
+              <option value="scroll">📜 Scroll — All questions shown at once (default)</option>
+              <option value="one-by-one">1️⃣ One by One — Each question shown with its own timer</option>
+            </select>
+            <div class="field-hint">Scroll: students see all questions and scroll to answer. One by One: one question at a time with a countdown — no skip or pass allowed.</div>
+          </div>
+          <div class="form-group" id="timePerQuestionGroup" style="flex:1;display:none">
+            <label>Time per Question (seconds)</label>
+            <input type="number" id="examTimePerQuestion" value="30" min="5" max="600"/>
+            <div class="field-hint">⏱ Timer auto-advances to the next question when it hits 0. Students can click <strong>Next →</strong> early after answering.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-header">
+        <span>Questions</span>
+        <div class="add-btns">
+          <button class="btn btn-sm btn-mcq" onclick="addQuestion('mcq')">＋ Multiple Choice</button>
+          <button class="btn btn-sm btn-tf" onclick="addQuestion('truefalse')">＋ True / False</button>
+          <button class="btn btn-sm btn-id" onclick="addQuestion('identification')">＋ Identification</button>
+          <button class="btn btn-sm" onclick="openJsonImportModal()" style="background:#7c3aed;color:#fff;border:none">📂 Import JSON</button>
+          <button class="btn btn-sm btn-outline" onclick="clearAllQuestions()">🗑 Clear All</button>
+        </div>
+      </div>
+
+      <div id="questionsContainer">
+        <div id="noQuestionsMsg" class="empty-state">
+          <div class="empty-icon">❓</div>
+          <div>No questions yet. Use the buttons above to add questions.</div>
+        </div>
+      </div>
+
+      <div class="save-bar">
+        <span id="qCountLabel" style="color:#64748b;font-size:.88rem">0 questions</span>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-outline" onclick="switchTab('exams')">Cancel</button>
+          <button class="btn btn-success" onclick="saveExam()">💾 Save Exam</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: RESULTS ══ -->
+    <div class="tab-panel" id="panel-results">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Results</h2>
+          <p class="panel-sub">View and export student submissions</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <select id="resultsExamFilter" class="exam-select" onchange="loadResults()">
+            <option value="">All Exams</option>
+          </select>
+          <button class="btn btn-success" onclick="exportExcel()">📥 Export Excel</button>
+          <button class="btn btn-danger" onclick="clearResults()">🗑 Clear</button>
+        </div>
+      </div>
+
+      <div id="resultStats" class="stats-row" style="display:none">
+        <div class="stat-card"><div class="stat-num" id="rTotal">0</div><div class="stat-lbl">Submissions</div></div>
+        <div class="stat-card"><div class="stat-num" id="rAvg">0%</div><div class="stat-lbl">Average Score</div></div>
+        <div class="stat-card"><div class="stat-num" id="rPassed">0</div><div class="stat-lbl">Passed (≥60%)</div></div>
+        <div class="stat-card"><div class="stat-num" id="rAutoSub">0</div><div class="stat-lbl">Auto-Submitted</div></div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Last Name</th>
+              <th>First Name</th>
+              <th>Student ID</th>
+              <th>Exam</th>
+              <th>Score</th>
+              <th>%</th>
+              <th>Submitted</th>
+              <th>Flag</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr><td colspan="10" class="empty-state">No submissions yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══ TAB: LIVE MONITOR ══ -->
+    <div class="tab-panel" id="panel-violations">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">🟢 Live Monitor</h2>
+          <p class="panel-sub">Students currently taking exams — violations appear first</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="liveCountBadge" style="background:#16a34a;color:#fff;border-radius:10px;padding:2px 10px;font-size:.82rem;font-weight:800">0 live</span>
+          <button class="btn btn-outline" onclick="loadLiveMonitor()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <div id="liveMonitorList" style="background:#fff;border-radius:12px;border:1.5px solid #e2e8f0;overflow:hidden">
+        <div class="empty-state" style="padding:24px">
+          <div class="empty-icon">👥</div>
+          <div>No students are currently taking an exam.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: ATTENDANCE ══ -->
+    <div class="tab-panel" id="panel-attendance">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">📋 Attendance</h2>
+          <p class="panel-sub">Create sessions, track time in/out and learning summaries</p>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary" onclick="openCreateAttendanceModal()">＋ New Session</button>
+          <button class="btn btn-outline" onclick="loadAttendanceSessions()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div id="attendanceSessionsList">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <div>No attendance sessions yet. Click <strong>New Session</strong> to create one.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: SETTINGS ══ -->
+    <div class="tab-panel" id="panel-settings">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Settings</h2>
+          <p class="panel-sub">Manage your teacher account</p>
+        </div>
+      </div>
+
+      <div class="card" style="max-width:600px">
+        <div class="settings-panel">
+          <h4>🔐 Change Password</h4>
+          <div class="form-group">
+            <label>Current Password</label>
+            <input type="password" id="currentPassword" placeholder="Enter current password"/>
+          </div>
+          <div class="form-group">
+            <label>New Password</label>
+            <input type="password" id="newPassword" placeholder="Enter new password (min 3 characters)"/>
+          </div>
+          <button class="btn btn-primary" onclick="changePassword()">Update Password</button>
+          <div id="passwordMessage" style="margin-top:12px"></div>
+        </div>
+
+        <div class="settings-panel">
+          <h4>ℹ️ System Info</h4>
+          <p style="color:#64748b;font-size:0.9rem">
+            <strong>Default Password:</strong> teacher123<br>
+            <strong>Note:</strong> Password changes are only valid for the current session. 
+            To make permanent changes, edit the server.js file.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ── CREATE ATTENDANCE SESSION MODAL ── -->
+<div class="modal-overlay" id="createAttendanceModal" style="display:none;align-items:center;justify-content:center">
+  <div class="modal-box" style="max-width:480px;width:100%">
+    <div class="modal-header" style="background:#16a34a;color:#fff;border-radius:12px 12px 0 0">
+      <h3 style="color:#fff">📋 New Attendance Session</h3>
+      <button onclick="closeCreateAttendanceModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;opacity:.8">✕</button>
+    </div>
+    <div style="padding:24px">
+      <div class="form-group">
+        <label>Session Title *</label>
+        <input type="text" id="attSessionTitle" placeholder="e.g. Math Class - Chapter 5, IT101 Lab Session" style="width:100%;padding:11px 14px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.95rem;font-family:inherit"/>
+        <div class="field-hint">Students will see this title when they check in.</div>
+      </div>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:10px;background:#f8fafc;border-radius:0 0 12px 12px">
+      <button class="btn btn-outline" onclick="closeCreateAttendanceModal()">Cancel</button>
+      <button class="btn" onclick="createAttendanceSession()" style="background:#16a34a;color:#fff">✅ Create Session</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ATTENDANCE RECORDS MODAL ── -->
+<div class="modal-overlay" id="attendanceRecordsModal" style="display:none;align-items:center;justify-content:center">
+  <div class="modal-box" style="max-width:800px;width:100%">
+    <div class="modal-header" style="background:#16a34a;color:#fff;border-radius:12px 12px 0 0">
+      <h3 id="attRecordsTitle" style="color:#fff">Attendance Records</h3>
+      <button onclick="closeAttendanceRecordsModal()" style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;opacity:.8">✕</button>
+    </div>
+    <div style="padding:20px 24px;max-height:65vh;overflow-y:auto">
+      <div id="attRecordsBody"></div>
+    </div>
+    <div style="padding:14px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#f8fafc;border-radius:0 0 12px 12px">
+      <span id="attRecordsCount" style="font-size:.85rem;color:#64748b"></span>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-outline" onclick="closeAttendanceRecordsModal()">Close</button>
+        <button class="btn btn-success" id="attExportBtn" onclick="exportAttendanceExcel()">📥 Export Excel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── JSON IMPORT MODAL ── -->
+<div class="modal-overlay" id="jsonImportModal" style="display:none;align-items:center;justify-content:center">
+  <div class="modal-box" style="max-width:640px;width:100%">
+    <div class="modal-header" style="background:#7c3aed;color:#fff;border-radius:12px 12px 0 0">
+      <h3 style="color:#fff">📂 Import Questions from JSON</h3>
+      <button class="modal-close" onclick="closeJsonImportModal()" style="color:#fff;opacity:.8">✕</button>
+    </div>
+    <div style="padding:20px 24px;max-height:70vh;overflow-y:auto">
+
+      <!-- File upload -->
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:.85rem;font-weight:600;color:#334155;margin-bottom:6px">📁 Upload a .json file</label>
+        <input type="file" id="jsonFileInput" accept=".json,application/json"
+          onchange="handleJsonFileUpload(event)"
+          style="display:block;width:100%;padding:10px;border:2px dashed #c4b5fd;border-radius:8px;background:#faf5ff;color:#6d28d9;font-size:.88rem;cursor:pointer"/>
+      </div>
+
+      <div style="text-align:center;color:#94a3b8;font-size:.82rem;margin-bottom:12px">— or paste JSON below —</div>
+
+      <!-- Textarea -->
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:.85rem;font-weight:600;color:#334155;margin-bottom:6px">📋 Paste JSON</label>
+        <textarea id="jsonImportText" rows="10"
+          placeholder='Paste your questions JSON here...'
+          oninput="previewJsonImport()"
+          style="width:100%;padding:12px;border:1.5px solid #e2e8f0;border-radius:8px;font-family:monospace;font-size:.82rem;color:#1e293b;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+
+      <!-- Preview -->
+      <div id="jsonImportPreview" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:14px">
+        <div style="font-weight:700;color:#15803d;margin-bottom:6px" id="jsonPreviewTitle">✅ Ready to import</div>
+        <div id="jsonPreviewDetails" style="font-size:.85rem;color:#166534;line-height:1.7"></div>
+      </div>
+      <div id="jsonImportError" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;margin-bottom:14px;color:#dc2626;font-size:.85rem"></div>
+
+      <!-- Format guide -->
+      <details style="margin-bottom:4px">
+        <summary style="cursor:pointer;font-size:.82rem;color:#7c3aed;font-weight:600;user-select:none">📖 Show JSON format guide</summary>
+        <div style="margin-top:10px;background:#1e293b;border-radius:8px;padding:14px;font-family:monospace;font-size:.78rem;color:#e2e8f0;white-space:pre-wrap;line-height:1.6">[
+  {
+    "type": "mcq",
+    "question": "Which protocol prevents loops?",
+    "answer": "C",
+    "options": ["EIGRP", "BGP", "STP", "OSPF"]
+  },
+  {
+    "type": "truefalse",
+    "question": "STP prevents broadcast storms.",
+    "answer": "True"
+  },
+  {
+    "type": "identification",
+    "question": "STP stands for?",
+    "answer": "SPANNING TREE PROTOCOL"
+  }
+]
+
+<span style="color:#94a3b8">// Also accepted: { "questions": [ ... ] }</span>
+<span style="color:#94a3b8">// MCQ answer: "A", "B", "C", or "D"</span>
+<span style="color:#94a3b8">// True/False answer: "True" or "False"</span></div>
+      </details>
+    </div>
+
+    <div style="padding:14px 24px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end;gap:10px;background:#f8fafc;border-radius:0 0 12px 12px">
+      <button class="btn btn-outline" onclick="closeJsonImportModal()">Cancel</button>
+      <button class="btn" id="jsonImportBtn" onclick="confirmJsonImport()" disabled
+        style="background:#7c3aed;color:#fff;opacity:.5;cursor:not-allowed">📥 Import Questions</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── DETAIL MODAL ── -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modalTitle">Student Answers</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ── CONFIRM MODAL ── -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header">
+      <h3 id="confirmTitle">Confirm</h3>
+      <button class="modal-close" onclick="closeConfirmModal()">✕</button>
+    </div>
+    <div style="padding:20px 24px">
+      <p id="confirmMessage" style="color:#475569;margin-bottom:20px;line-height:1.6"></p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-outline" onclick="closeConfirmModal()">Cancel</button>
+        <button class="btn btn-danger" id="confirmOkBtn" onclick="confirmOk()">Confirm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script src="/teacher/teacher.js?v=6"></script>
+<script>
+  // Login functionality
+  function login() {
+    const password = document.getElementById('teacherPassword').value;
+    fetch('/api/teacher/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: password })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').classList.add('active');
+        // Initialize app
+        setStudentURL();
+        loadExamsList();
+        startAutoRefresh();
+        attachEventListeners();
+      } else {
+        document.getElementById('loginError').style.display = 'block';
+      }
+    })
+    .catch(() => {
+      document.getElementById('loginError').style.display = 'block';
+    });
+  }
+
+  // Enter key to login
+  document.getElementById('teacherPassword').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') login();
+  });
+
+  // Change password
+  function changePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const msgEl = document.getElementById('passwordMessage');
+    
+    if (!currentPassword || !newPassword) {
+      msgEl.innerHTML = '<span style="color:#ef4444">Please fill in all fields</span>';
+      return;
+    }
+    
+    fetch('/api/teacher/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.success) {
+        msgEl.innerHTML = '<span style="color:#22c55e">✓ ' + data.message + '</span>';
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+      } else {
+        msgEl.innerHTML = '<span style="color:#ef4444">' + data.error + '</span>';
+      }
+    })
+    .catch(() => {
+      msgEl.innerHTML = '<span style="color:#ef4444">Error changing password</span>';
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Student Exam Portal</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#2563eb;--blue-d:#1d4ed8;--blue-l:#eff6ff;
+  --green:#16a34a;--green-l:#f0fdf4;
+  --red:#dc2626;--red-l:#fef2f2;
+  --amber:#d97706;--amber-l:#fffbeb;
+  --gray-100:#f1f5f9;--gray-200:#e2e8f0;--gray-300:#cbd5e1;
+  --gray-400:#94a3b8;--gray-500:#64748b;--gray-700:#334155;
+  --gray-800:#1e293b;--white:#ffffff;
+  --shadow:0 1px 3px rgba(0,0,0,.12);
+  --shadow-md:0 4px 6px rgba(0,0,0,.1);
+}
+body{font-family:'Segoe UI',Arial,sans-serif;background:var(--gray-100);color:var(--gray-800);min-height:100vh}
+.screen{display:none;min-height:100vh}
+.screen.active{display:flex;flex-direction:column}
+#loginScreen{align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#1e40af 0%,#2563eb 50%,#3b82f6 100%)}
+.login-card{background:var(--white);border-radius:16px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .icon{font-size:3rem;display:block;margin-bottom:8px}
+.login-logo h1{font-size:1.4rem;font-weight:800;color:var(--gray-800)}
+.login-logo p{font-size:.85rem;color:var(--gray-500);margin-top:4px}
+.form-group{margin-bottom:16px}
+label{display:block;font-size:.85rem;font-weight:600;color:var(--gray-700);margin-bottom:6px}
+input[type=text]{width:100%;padding:11px 14px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:.95rem;color:var(--gray-800);font-family:inherit;transition:border-color .2s}
+input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.code-input{border-color:#9333ea !important;font-size:1.1rem !important;font-weight:700 !important;letter-spacing:1px;text-transform:uppercase}
+.code-input:focus{border-color:#9333ea !important;box-shadow:0 0 0 3px rgba(147,51,234,.15) !important}
+.btn-start{width:100%;padding:13px;background:var(--blue);color:var(--white);border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;transition:background .2s;margin-top:8px;font-family:inherit}
+.btn-start:hover{background:var(--blue-d)}
+.btn-start:disabled{background:var(--gray-300);cursor:not-allowed}
+.login-note{text-align:center;font-size:.78rem;color:var(--gray-400);margin-top:16px;line-height:1.5}
+#loginError{background:var(--red-l);color:var(--red);border:1px solid #fecaca;border-radius:8px;padding:10px 14px;font-size:.85rem;margin-bottom:14px;display:none}
+.divider{border:none;border-top:1px solid var(--gray-200);margin:16px 0}
+.inline-rules{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-top:14px;margin-bottom:12px}
+.inline-rules-title{font-size:.75rem;font-weight:800;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.inline-rules ul{list-style:none;display:flex;flex-direction:column;gap:5px}
+.inline-rules ul li{font-size:.82rem;color:var(--gray-700);display:flex;align-items:flex-start;gap:6px;line-height:1.4}
+.inline-rules-warning{font-size:.78rem;color:#92400e;font-weight:600;margin-top:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;line-height:1.4}
+.inline-agree-check{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px;cursor:pointer;padding:2px 0}
+.inline-agree-check input[type=checkbox]{width:20px;height:20px;flex-shrink:0;margin-top:2px;cursor:pointer;accent-color:var(--blue)}
+.inline-agree-check span{font-size:.85rem;color:var(--gray-700);line-height:1.5;font-weight:600}
+#examScreen{background:var(--gray-100)}
+.exam-header{background:var(--blue);color:var(--white);padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:var(--shadow-md)}
+.exam-title{font-size:.95rem;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.timer-box{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:5px 14px;font-size:1rem;font-weight:800;letter-spacing:1px;min-width:80px;text-align:center;flex-shrink:0}
+.timer-box.warning{background:rgba(217,119,6,.8);border-color:rgba(217,119,6,.9)}
+.timer-box.danger{background:rgba(220,38,38,.9);border-color:rgba(220,38,38,1);animation:timerPulse .8s infinite}
+@keyframes timerPulse{0%,100%{opacity:1}50%{opacity:.6}}
+.anticheat-bar{background:#fef3c7;border-bottom:1px solid #fde68a;padding:8px 20px;font-size:.78rem;color:#92400e;text-align:center;font-weight:600}
+.exam-body{max-width:720px;margin:0 auto;padding:20px 16px 100px}
+.student-info-bar{background:var(--white);border-radius:10px;padding:12px 16px;margin-bottom:20px;box-shadow:var(--shadow);display:flex;align-items:center;gap:10px;font-size:.88rem}
+.student-info-bar .avatar{width:36px;height:36px;border-radius:50%;background:var(--blue-l);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;flex-shrink:0}
+.progress-bar-wrap{background:var(--white);border-radius:10px;padding:12px 16px;margin-bottom:20px;box-shadow:var(--shadow)}
+.progress-label{display:flex;justify-content:space-between;font-size:.8rem;color:var(--gray-500);margin-bottom:6px;font-weight:600}
+.progress-bar{height:8px;background:var(--gray-200);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:var(--blue);border-radius:4px;transition:width .3s}
+.q-card{background:var(--white);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--shadow);border-left:4px solid var(--gray-300)}
+.q-card.answered{border-left-color:var(--green)}
+.q-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.q-number{background:var(--blue);color:var(--white);width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;flex-shrink:0}
+.q-type-badge{font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:10px}
+.q-type-mcq{background:#eff6ff;color:#2563eb}
+.q-type-tf{background:#f0fdf4;color:#16a34a}
+.q-type-id{background:#fdf4ff;color:#9333ea}
+.q-text{font-size:.95rem;font-weight:600;color:var(--gray-800);line-height:1.5;flex:1}
+.mcq-options{display:flex;flex-direction:column;gap:10px}
+.mcq-option{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1.5px solid var(--gray-200);border-radius:8px;cursor:pointer;transition:all .2s;font-size:.9rem}
+.mcq-option:hover{border-color:var(--blue);background:var(--blue-l)}
+.mcq-option.selected{border-color:var(--blue);background:var(--blue-l);font-weight:600}
+.option-circle{width:20px;height:20px;border-radius:50%;border:2px solid var(--gray-300);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+.mcq-option.selected .option-circle{border-color:var(--blue);background:var(--blue)}
+.option-check{width:8px;height:8px;border-radius:50%;background:var(--white);display:none}
+.mcq-option.selected .option-check{display:block}
+.option-lbl{font-weight:700;color:var(--gray-500);min-width:18px;font-size:.85rem}
+.tf-options{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tf-btn{padding:14px;border:1.5px solid var(--gray-200);border-radius:8px;cursor:pointer;font-size:.95rem;font-weight:700;text-align:center;transition:all .2s;background:var(--white)}
+.tf-btn:hover{border-color:var(--blue);background:var(--blue-l)}
+.tf-btn.selected-true{border-color:var(--green);background:var(--green-l);color:var(--green)}
+.tf-btn.selected-false{border-color:var(--red);background:var(--red-l);color:var(--red)}
+.id-input{width:100%;padding:11px 14px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:.95rem;font-family:inherit;color:var(--gray-800);transition:border-color .2s}
+.id-input:focus{outline:none;border-color:#9333ea;box-shadow:0 0 0 3px rgba(147,51,234,.1)}
+.submit-footer{position:fixed;bottom:0;left:0;right:0;background:var(--white);border-top:1px solid var(--gray-200);padding:14px 20px;box-shadow:0 -4px 12px rgba(0,0,0,.08);z-index:50}
+.submit-inner{max-width:720px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.submit-progress{font-size:.82rem;color:var(--gray-500);font-weight:600}
+.btn-submit{padding:12px 28px;background:var(--green);color:var(--white);border:none;border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s;font-family:inherit}
+.btn-submit:hover{background:#15803d}
+#submittedScreen{align-items:center;justify-content:center;background:var(--gray-100)}
+.submitted-card{background:var(--white);border-radius:16px;padding:40px 32px;text-align:center;max-width:420px;width:90%;box-shadow:var(--shadow-md)}
+.submitted-icon{font-size:4rem;margin-bottom:16px}
+.submitted-card h2{font-size:1.3rem;font-weight:800;color:var(--gray-800);margin-bottom:8px}
+.submitted-card p{font-size:.9rem;color:var(--gray-500);line-height:1.6}
+.submitted-name{font-size:1rem;font-weight:700;color:var(--blue);margin:12px 0}
+.auto-sub-note{background:var(--amber-l);color:var(--amber);border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:.82rem;margin-top:14px;font-weight:600}
+#warningOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#warningOverlay.show{display:flex}
+.warning-card{background:var(--white);border-radius:14px;padding:32px;max-width:400px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.warning-icon{font-size:3rem;margin-bottom:12px}
+.warning-card h2{font-size:1.2rem;font-weight:800;color:var(--red);margin-bottom:10px}
+.warning-card p{font-size:.88rem;color:var(--gray-600);line-height:1.6;margin-bottom:8px}
+.btn-return{width:100%;padding:12px;background:var(--blue);color:var(--white);border:none;border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit}
+#examScreen.violation-blur .exam-body,
+#examScreen.violation-blur .submit-footer,
+#examScreen.violation-blur .exam-header{filter:blur(8px);pointer-events:none;user-select:none}
+#oboScreen.violation-blur .exam-body,
+#oboScreen.violation-blur .submit-footer,
+#oboScreen.violation-blur .exam-header{filter:blur(8px);pointer-events:none;user-select:none}
+#firstName,#lastName{text-transform:uppercase}
+#examWatermark,#oboWatermark{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:48;overflow:hidden;display:none}
+#examWatermark.active,#oboWatermark.active{display:block}
+.wm-tile{position:absolute;font-size:13px;font-weight:800;color:rgba(37,99,235,0.13);white-space:nowrap;transform:rotate(-35deg);transform-origin:center center;user-select:none;pointer-events:none;letter-spacing:1px;line-height:1.6;text-align:center;font-family:'Segoe UI',Arial,sans-serif}
+#examScreen .q-text,#examScreen .q-header,#examScreen .mcq-option,#examScreen .tf-btn,#examScreen .q-type-badge,#examScreen .q-number{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+#examScreen .id-input{-webkit-user-select:text;-moz-user-select:text;user-select:text}
+@media print{body{display:none !important}}
+.obo-meta{display:flex;align-items:center;justify-content:space-between;background:var(--white);border-radius:10px;padding:12px 16px;margin-bottom:20px;box-shadow:var(--shadow);gap:12px}
+.obo-counter{font-size:.9rem;font-weight:700;color:var(--gray-700)}
+.obo-counter span{color:var(--blue)}
+.obo-q-timer-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.obo-q-timer-label{font-size:.78rem;color:var(--gray-500);font-weight:600}
+.obo-q-timer{background:var(--blue);color:var(--white);border-radius:8px;padding:5px 14px;font-size:1rem;font-weight:800;letter-spacing:1px;min-width:70px;text-align:center}
+.obo-q-timer.warning{background:var(--amber)}
+.obo-q-timer.danger{background:var(--red);animation:timerPulse .8s infinite}
+.obo-q-card{background:var(--white);border-radius:12px;padding:24px 20px;box-shadow:var(--shadow-md);border-left:4px solid var(--blue)}
+.obo-q-header{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.obo-q-text{font-size:1rem;font-weight:700;color:var(--gray-800);line-height:1.6;flex:1}
+.btn-obo-next{padding:12px 32px;background:var(--blue);color:var(--white);border:none;border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s;font-family:inherit}
+.btn-obo-next:hover{background:var(--blue-d)}
+.btn-obo-next:disabled{background:var(--gray-300);cursor:not-allowed}
+.btn-obo-submit{padding:12px 32px;background:var(--green);color:var(--white);border:none;border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s;font-family:inherit}
+.btn-obo-submit:hover{background:#15803d}
+.obo-answered-badge{display:inline-flex;align-items:center;gap:4px;background:var(--green-l);color:var(--green);border:1px solid #bbf7d0;border-radius:6px;padding:3px 10px;font-size:.78rem;font-weight:700}
+#confirmModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center}
+#confirmModal.show{display:flex}
+.confirm-card{background:var(--white);border-radius:14px;padding:28px;max-width:360px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.confirm-card h3{font-size:1.1rem;font-weight:800;margin-bottom:10px}
+.confirm-card p{font-size:.88rem;color:var(--gray-500);margin-bottom:20px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px}
+.btn-confirm-yes{flex:1;padding:11px;background:var(--green);color:var(--white);border:none;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit}
+.btn-confirm-no{flex:1;padding:11px;background:var(--gray-100);color:var(--gray-700);border:1.5px solid var(--gray-300);border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit}
+@media(max-width:480px){.login-card{padding:28px 20px}.exam-body{padding:16px 12px 100px}}
+</style>
+</head>
+<body>
+
+<!-- ══ SCREEN 0: MODE SELECTION ══ -->
+<div id="modeScreen" class="screen active">
+  <div style="min-height:100vh;background:linear-gradient(135deg,#1e40af 0%,#2563eb 50%,#3b82f6 100%);display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center">
+      <div style="font-size:2.8rem;margin-bottom:8px">📋</div>
+      <h1 style="font-size:1.4rem;font-weight:800;color:#1e293b;margin-bottom:6px">Student Portal</h1>
+      <p style="font-size:.85rem;color:#64748b;margin-bottom:28px">What would you like to do?</p>
+      <button onclick="showScreen('loginScreen')" style="width:100%;padding:18px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;margin-bottom:12px;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:1.4rem">📝</span>
+        <div style="text-align:left">
+          <div>Take an Exam</div>
+          <div style="font-size:.75rem;font-weight:400;opacity:.85">Enter exam code and answer questions</div>
+        </div>
+      </button>
+      <button onclick="showScreen('attendanceLoginScreen')" style="width:100%;padding:18px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px">
+        <span style="font-size:1.4rem">🕐</span>
+        <div style="text-align:left">
+          <div>Attendance Check-In</div>
+          <div style="font-size:.75rem;font-weight:400;opacity:.85">Time in / Time out with learning summary</div>
+        </div>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 1: LOGIN ══ -->
+<div class="screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="icon">📝</span>
+      <h1>Student Exam Portal</h1>
+      <p>Enter your details to begin</p>
+    </div>
+    <div id="loginError"></div>
+    <div class="form-group">
+      <label>First Name *</label>
+      <input type="text" id="firstName" placeholder="Enter your first name" autocomplete="off"/>
+    </div>
+    <div class="form-group">
+      <label>Last Name *</label>
+      <input type="text" id="lastName" placeholder="Enter your last name" autocomplete="off"/>
+    </div>
+    <hr class="divider"/>
+    <div class="form-group">
+      <label>🔑 Exam Code *</label>
+      <input type="text" id="examCode" class="code-input" placeholder="Enter exam code (e.g. ITNET)" autocomplete="off" autocapitalize="characters"/>
+    </div>
+
+    <!-- INLINE RULES + AGREEMENT -->
+    <div class="inline-rules">
+      <div class="inline-rules-title">🚫 Exam Rules — Read Before Starting</div>
+      <ul>
+        <li>📵 No switching tabs or apps during the exam</li>
+        <li>🔙 No using the Back button or minimizing the browser</li>
+        <li>❌ No closing or refreshing this page</li>
+        <li>📸 No screenshots or screen recording</li>
+        <li>🤝 No sharing answers or communicating with others</li>
+      </ul>
+      <div class="inline-rules-warning">⚠️ Violations are automatically detected and reported to your teacher. Your exam will be immediately submitted.</div>
+    </div>
+    <label class="inline-agree-check">
+      <input type="checkbox" id="agreeCheckbox" onchange="toggleStartBtn()"/>
+      <span>I have read and understood the exam rules. I agree to take this exam honestly and will not attempt to cheat.</span>
+    </label>
+
+    <button class="btn-start" id="startBtn" onclick="startExam()" disabled>Start Exam →</button>
+    <div class="login-note" id="setupInfo">
+      📡 Connect to the same WiFi as your teacher.<br>
+      No internet connection required.
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2: EXAM ══ -->
+<div class="screen" id="examScreen">
+  <div id="examWatermark"></div>
+  <div class="exam-header">
+    <div class="exam-title" id="examTitleBar">Exam</div>
+    <div class="timer-box" id="timerBox">00:00</div>
+  </div>
+  <div class="anticheat-bar">⚠️ Do not leave this page. Tab switching is monitored and will be recorded.</div>
+  <div class="exam-body">
+    <div class="student-info-bar">
+      <div class="avatar" id="studentAvatar">?</div>
+      <div>
+        <div style="font-weight:700" id="studentNameBar">Student</div>
+        <div style="color:#64748b;font-size:.78rem" id="studentIdBar"></div>
+      </div>
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-label">
+        <span>Progress</span>
+        <span id="progressText">0 / 0 answered</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+    <div id="questionsArea"></div>
+  </div>
+  <div class="submit-footer">
+    <div class="submit-inner">
+      <div class="submit-progress" id="submitProgress">0 of 0 answered</div>
+      <button class="btn-submit" onclick="confirmSubmit()">Submit Exam ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 3: ALREADY SUBMITTED (locked) ══ -->
+<div class="screen" id="alreadySubmittedScreen">
+  <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#1e40af 0%,#2563eb 50%,#3b82f6 100%);padding:20px">
+    <div style="background:#fff;border-radius:16px;padding:40px 32px;text-align:center;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="font-size:4rem;margin-bottom:16px">🔒</div>
+      <h2 style="font-size:1.3rem;font-weight:800;color:#1e293b;margin-bottom:8px">Access Denied</h2>
+      <p style="font-size:.9rem;color:#64748b;line-height:1.6;margin-bottom:16px">You have already submitted this exam. You cannot take it again.</p>
+      <div id="alreadySubmittedInfo" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;font-size:.85rem;color:#dc2626;font-weight:600;margin-bottom:16px;line-height:1.6"></div>
+      <p style="font-size:.78rem;color:#94a3b8">If you believe this is an error, please contact your teacher.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN 4: SUBMITTED ══ -->
+<div class="screen" id="submittedScreen">
+  <div class="submitted-card">
+    <div class="submitted-icon" id="submittedIcon">✅</div>
+    <h2 id="submittedHeading">Exam Submitted!</h2>
+    <div class="submitted-name" id="submittedName"></div>
+    <p>Your answers have been recorded.<br/>Please wait for your teacher to announce the results.</p>
+    <div id="autoSubNote" class="auto-sub-note" style="display:none">
+      ⚠️ Your exam was automatically submitted because you left the page.
+    </div>
+    <p style="margin-top:16px;font-size:.78rem;color:#94a3b8">You may now close this page.</p>
+  </div>
+</div>
+
+<!-- ══ SCREEN 5: ONE-BY-ONE EXAM MODE ══ -->
+<div class="screen" id="oboScreen">
+  <div id="oboWatermark"></div>
+  <div class="exam-header">
+    <div class="exam-title" id="oboTitleBar">Exam</div>
+    <div class="timer-box" id="oboOverallTimer">00:00</div>
+  </div>
+  <div class="anticheat-bar">⚠️ Do not leave this page. Tab switching is monitored and will be recorded.</div>
+  <div class="exam-body">
+    <div class="obo-meta">
+      <div class="obo-counter">
+        Question <span id="oboQNum">1</span> of <span id="oboQTotal">10</span>
+      </div>
+      <div class="obo-q-timer-wrap">
+        <div class="obo-q-timer-label">Time for this question:</div>
+        <div class="obo-q-timer" id="oboQTimer">00:30</div>
+      </div>
+    </div>
+    <div class="obo-q-card" id="oboQCard">
+      <div class="obo-q-header">
+        <div class="q-number" id="oboQNumBadge">1</div>
+        <span class="q-type-badge" id="oboQTypeBadge">MCQ</span>
+        <div class="obo-q-text" id="oboQText">Question text here</div>
+      </div>
+      <div id="oboAnswerArea"></div>
+    </div>
+  </div>
+  <div class="submit-footer">
+    <div class="submit-inner">
+      <div id="oboAnsweredBadge" style="font-size:.85rem;color:var(--gray-500);font-weight:600">Not answered yet</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn-obo-next" id="oboNextBtn" onclick="nextOboQuestion()" disabled>Next →</button>
+        <button class="btn-obo-submit" id="oboSubmitBtn" onclick="confirmSubmit()" style="display:none">Submit Exam ✓</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WARNING OVERLAY -->
+<div id="warningOverlay">
+  <div class="warning-card">
+    <div class="warning-icon">🚨</div>
+    <h2>VIOLATION DETECTED!</h2>
+    <p id="violationTypeMsg">You left the exam window.</p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;margin:14px 0">
+      <div style="font-size:.82rem;color:#dc2626;font-weight:700;margin-bottom:6px">⏸ EXAM PAUSED</div>
+      <div style="font-size:.85rem;color:#64748b;line-height:1.6">Your screen is blurred and your exam is paused.<br/>Waiting for your teacher's decision...</div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px">
+      <div style="width:10px;height:10px;border-radius:50%;background:#dc2626;animation:vPulse 1s infinite"></div>
+      <span style="font-size:.82rem;color:#64748b;font-weight:600">Teacher is being notified</span>
+    </div>
+    <div style="margin-top:12px;font-size:.75rem;color:#94a3b8">Violation count: <strong id="violationCountDisplay">1</strong></div>
+  </div>
+</div>
+<style>@keyframes vPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}</style>
+
+<!-- ══ SCREEN: ATTENDANCE LOGIN ══ -->
+<div id="attendanceLoginScreen" class="screen">
+  <div style="min-height:100vh;background:linear-gradient(135deg,#14532d 0%,#16a34a 50%,#22c55e 100%);display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="text-align:center;margin-bottom:24px">
+        <span style="font-size:2.5rem">🕐</span>
+        <h1 style="font-size:1.3rem;font-weight:800;color:#1e293b;margin-top:8px">Attendance Check-In</h1>
+        <p style="font-size:.82rem;color:#64748b;margin-top:4px">Enter your name and the session code from your teacher</p>
+      </div>
+      <div id="attLoginError" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:.85rem;margin-bottom:14px"></div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:.82rem;font-weight:600;color:#374151;margin-bottom:5px">First Name *</label>
+        <input type="text" id="attFirstName" placeholder="JUAN" style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;font-family:inherit;box-sizing:border-box;text-transform:uppercase"/>
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:.82rem;font-weight:600;color:#374151;margin-bottom:5px">Last Name *</label>
+        <input type="text" id="attLastName" placeholder="DELA CRUZ" style="width:100%;padding:11px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.95rem;font-family:inherit;box-sizing:border-box;text-transform:uppercase"/>
+      </div>
+      <div style="margin-bottom:20px">
+        <label style="display:block;font-size:.82rem;font-weight:600;color:#374151;margin-bottom:5px">Session Code *</label>
+        <input type="text" id="attCode" placeholder="e.g. A3F9XZ" style="width:100%;padding:11px 14px;border:1.5px solid #16a34a;border-radius:8px;font-size:1.05rem;font-weight:700;font-family:inherit;box-sizing:border-box;text-transform:uppercase;letter-spacing:2px"/>
+        <div style="font-size:.75rem;color:#6b7280;margin-top:4px">Ask your teacher for the session code</div>
+      </div>
+      <button onclick="attTimeIn()" id="attTimeInBtn" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:12px">🕐 Time In</button>
+      <button onclick="showScreen('modeScreen')" style="width:100%;padding:10px;background:transparent;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: CHECKED IN ══ -->
+<div id="checkedInScreen" class="screen">
+  <div style="min-height:100vh;background:linear-gradient(135deg,#14532d 0%,#16a34a 50%,#22c55e 100%);display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center">
+      <div style="font-size:3rem;margin-bottom:8px">✅</div>
+      <h2 style="font-size:1.3rem;font-weight:800;color:#15803d;margin-bottom:6px">You are Checked In!</h2>
+      <div id="checkedInName" style="font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:4px"></div>
+      <div id="checkedInSession" style="font-size:.85rem;color:#64748b;margin-bottom:4px"></div>
+      <div id="checkedInTime" style="font-size:.82rem;color:#94a3b8;margin-bottom:24px"></div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:24px;font-size:.82rem;color:#166534;line-height:1.6">
+        📌 Stay in class and click <strong>Time Out</strong> when you leave.<br/>
+        You will be asked to write a short summary of what you learned.
+      </div>
+      <button onclick="showScreen('learningSummaryScreen')" style="width:100%;padding:13px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit">🚪 Time Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: LEARNING SUMMARY ══ -->
+<div id="learningSummaryScreen" class="screen">
+  <div style="min-height:100vh;background:linear-gradient(135deg,#1e40af 0%,#2563eb 50%,#3b82f6 100%);display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.25)">
+      <div style="text-align:center;margin-bottom:20px">
+        <span style="font-size:2.5rem">📖</span>
+        <h2 style="font-size:1.2rem;font-weight:800;color:#1e293b;margin-top:8px">Learning Summary</h2>
+        <p style="font-size:.82rem;color:#64748b;margin-top:4px">Before you go, write a short summary of what you learned today.</p>
+      </div>
+      <div id="summaryError" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;color:#dc2626;font-size:.85rem;margin-bottom:14px"></div>
+      <div style="margin-bottom:6px;font-size:.82rem;font-weight:600;color:#374151">What did you learn today? *</div>
+      <textarea id="learningSummaryText" rows="6" placeholder="Write at least a few sentences about what you learned in class today..." style="width:100%;padding:12px 14px;border:1.5px solid #d1d5db;border-radius:8px;font-size:.9rem;font-family:inherit;resize:vertical;box-sizing:border-box;color:#1e293b;line-height:1.6"></textarea>
+      <div id="summaryCharCount" style="font-size:.75rem;color:#94a3b8;text-align:right;margin-top:4px;margin-bottom:16px">0 characters</div>
+      <button onclick="attTimeOut()" id="attTimeOutBtn" style="width:100%;padding:13px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px">✅ Submit & Time Out</button>
+      <button onclick="showScreen('checkedInScreen')" style="width:100%;padding:10px;background:transparent;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:8px;font-size:.88rem;font-weight:600;cursor:pointer;font-family:inherit">← Back (Stay in class)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SCREEN: ATTENDANCE DONE ══ -->
+<div id="attendanceDoneScreen" class="screen">
+  <div style="min-height:100vh;background:linear-gradient(135deg,#14532d 0%,#16a34a 50%,#22c55e 100%);display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.25);text-align:center">
+      <div style="font-size:3rem;margin-bottom:8px">🎉</div>
+      <h2 style="font-size:1.3rem;font-weight:800;color:#15803d;margin-bottom:6px">Attendance Complete!</h2>
+      <div id="attDoneName" style="font-size:1rem;font-weight:700;color:#1e293b;margin-bottom:16px"></div>
+      <div id="attDoneDetails" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin-bottom:20px;text-align:left;font-size:.85rem;color:#166534;line-height:2"></div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;font-size:.8rem;color:#1d4ed8;margin-bottom:20px">
+        ✅ Your attendance and learning summary have been recorded.
+      </div>
+      <button onclick="showScreen('modeScreen')" style="width:100%;padding:13px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM SUBMIT MODAL -->
+<div id="confirmModal">
+  <div class="confirm-card">
+    <h3>Submit Exam?</h3>
+    <p id="confirmMsg">Are you sure you want to submit?</p>
+    <div class="confirm-btns">
+      <button class="btn-confirm-yes" onclick="doSubmit()">Yes, Submit</button>
+      <button class="btn-confirm-no" onclick="closeConfirm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- CAPACITY EXCEEDED MODAL -->
+<div id="capacityModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:950;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center">
+    <div style="font-size:3.5rem;margin-bottom:14px">🚫</div>
+    <h2 style="font-size:1.2rem;font-weight:800;color:#dc2626;margin-bottom:10px">Exam is Full!</h2>
+    <div id="capacityModalMsg" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px;font-size:.88rem;color:#dc2626;font-weight:600;margin-bottom:16px;line-height:1.6"></div>
+    <p style="font-size:.85rem;color:#64748b;margin-bottom:20px;line-height:1.5">
+      Please go to your <strong>teacher</strong> and ask them to increase the maximum number of students for this exam.
+    </p>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;font-size:.82rem;color:#1d4ed8;font-weight:600;margin-bottom:20px">
+      📋 Teacher can edit the exam and increase the <strong>Maximum Students</strong> setting.
+    </div>
+    <button onclick="closeCapacityModal()" style="width:100%;padding:13px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit">OK, I'll go to my teacher</button>
+  </div>
+</div>
+
+<script src="/student/student.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "name": "offline-exam-system",
+  "version": "1.0.0",
+  "description": "Offline Exam System for Local WiFi Network",
+  "main": "server.js",
+  "bin": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "pkg . --targets node22-win-x64 --output dist/offline-exam-system.exe"
+  },
+  "pkg": {
+    "scripts": "server.js",
+    "assets": [
+      "public/**/*",
+      "node_modules/xlsx/dist/**/*"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ]
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^5.16.1"
+  }
+}

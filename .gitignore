@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+
+# Data files (except config, which may contain custom password)
+data/*.json
+!data/config.json
+
+# Separate sub-apps (use submodule if you want to include them)
+exam-student-app/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+temp/
+
+# Package lock (optional - keep if you want reproducible installs)
+# package-lock.json
