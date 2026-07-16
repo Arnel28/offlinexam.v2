@@ -183,17 +183,15 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
     </div>
     <div id="loginError"></div>
     <div class="form-group">
-      <label>First Name *</label>
-      <input type="text" id="firstName" placeholder="Enter your first name" autocomplete="off"/>
-    </div>
-    <div class="form-group">
-      <label>Last Name *</label>
-      <input type="text" id="lastName" placeholder="Enter your last name" autocomplete="off"/>
-    </div>
-    <hr class="divider"/>
-    <div class="form-group">
       <label>🔑 Exam Code *</label>
       <input type="text" id="examCode" class="code-input" placeholder="Enter exam code (e.g. ITNET)" autocomplete="off" autocapitalize="characters"/>
+    </div>
+    <div class="form-group">
+      <label>Student Name *</label>
+      <select id="studentNameSelect" style="width:100%;padding:11px 14px;border:1.5px solid var(--gray-300);border-radius:8px;font-size:.95rem;color:var(--gray-800);font-family:inherit;background:#fff">
+        <option value="">Enter exam code first to load names...</option>
+      </select>
+      <div style="font-size:.75rem;color:#64748b;margin-top:6px">After entering exam code, select your name from the teacher's list.</div>
     </div>
 
     <!-- INLINE RULES + AGREEMENT -->
@@ -450,6 +448,6 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
   </div>
 </div>
 
-<script src="/student/student.js"></script>
+<script src="/student/student.js?v=2"></script>
 </body>
 </html>
