@@ -33,6 +33,10 @@ function setStudentURL() {
 //  EVENT LISTENERS
 // ─────────────────────────────────────────
 function attachEventListeners() {
+  var allowedTa = document.getElementById('examAllowedStudents');
+  if (allowedTa) {
+    allowedTa.addEventListener('input', updateAllowedCountDisplay);
+  }
   // Tab buttons
   document.getElementById('tab-exams').addEventListener('click', function() { switchTab('exams'); });
   document.getElementById('tab-builder').addEventListener('click', function() { switchTab('builder'); });
@@ -198,17 +202,40 @@ function attachExamCardListeners() {
   });
 }
 
+function parseAllowedStudentsInput(raw) {
+  if (!raw) return [];
+  var seen = {};
+  return raw
+    .split('\n')
+    .map(function(line) { return line.trim(); })
+    .filter(function(line) { return line.length > 0; })
+    .map(function(line) { return line.toUpperCase(); })
+    .filter(function(line) {
+      if (seen[line]) return false;
+      seen[line] = true;
+      return true;
+    });
+}
+
+function updateAllowedCountDisplay() {
+  var ta = document.getElementById('examAllowedStudents');
+  if (!ta) return;
+  var count = parseAllowedStudentsInput(ta.value).length;
+  var display = document.getElementById('currentUsageDisplay');
+  if (display) display.textContent = count + ' student' + (count !== 1 ? 's' : '');
+}
+
 function newExam() {
   editingExamId = null;
   questions = [];
   document.getElementById('examTitle').value = '';
   document.getElementById('examTime').value = '60';
-  document.getElementById('examMaxStudents').value = '0';
+  document.getElementById('examAllowedStudents').value = '';
   document.getElementById('examQuestionMode').value = 'scroll';
   document.getElementById('examTimePerQuestion').value = '30';
   var tpqGroup = document.getElementById('timePerQuestionGroup');
   if (tpqGroup) tpqGroup.style.display = 'none';
-  updateUsageDisplay(0, 0);
+  updateAllowedCountDisplay();
   document.getElementById('builderTitle').textContent = 'Create New Exam';
   document.getElementById('builderSub').textContent = 'Fill in the details and add questions below';
   renderQuestions();
@@ -237,12 +264,12 @@ function editExam(id) {
       });
       document.getElementById('examTitle').value = exam.title;
       document.getElementById('examTime').value = exam.timeLimit;
-      document.getElementById('examMaxStudents').value = exam.maxStudents || 0;
+      document.getElementById('examAllowedStudents').value = (exam.allowedStudents || []).join('\n');
       document.getElementById('examQuestionMode').value = exam.questionMode || 'scroll';
       document.getElementById('examTimePerQuestion').value = exam.timePerQuestion || 30;
       var tpqGroup = document.getElementById('timePerQuestionGroup');
       if (tpqGroup) tpqGroup.style.display = (exam.questionMode === 'one-by-one') ? 'flex' : 'none';
-      updateUsageDisplay(exam.submissionCount || 0, exam.maxStudents || 0);
+      updateAllowedCountDisplay();
       document.getElementById('builderTitle').textContent = 'Edit Exam';
       document.getElementById('builderSub').textContent = 'Code: ' + exam.title;
       renderQuestions();
@@ -252,16 +279,6 @@ function editExam(id) {
     .finally(function() { _isActionInProgress = false; });
 }
 
-function updateUsageDisplay(current, max) {
-  var display = document.getElementById('currentUsageDisplay');
-  if (max > 0) {
-    display.textContent = current + ' / ' + max;
-    display.style.color = current >= max ? '#ef4444' : '#15803d';
-  } else {
-    display.textContent = current + ' (No limit)';
-    display.style.color = '#15803d';
-  }
-}
 
 function deleteExam(id, title) {
   _isActionInProgress = true;
@@ -704,11 +721,12 @@ function clearAllQuestions() {
 function saveExam() {
   var title = document.getElementById('examTitle').value.trim();
   var timeLimit = parseInt(document.getElementById('examTime').value);
-  var maxStudents = parseInt(document.getElementById('examMaxStudents').value);
+  var allowedStudents = parseAllowedStudentsInput(document.getElementById('examAllowedStudents').value);
   var questionMode = document.getElementById('examQuestionMode').value || 'scroll';
   var timePerQuestion = parseInt(document.getElementById('examTimePerQuestion').value) || 30;
 
   if (!title) { showToast('Please enter an exam title.', 'error'); return; }
+  if (allowedStudents.length === 0) { showToast('Please enter at least one allowed student.', 'error'); return; }
   if (!timeLimit || timeLimit < 1) { showToast('Please enter a valid time limit.', 'error'); return; }
   if (questionMode === 'one-by-one' && (timePerQuestion < 5 || timePerQuestion > 600)) {
     showToast('Time per question must be between 5 and 600 seconds.', 'error'); return;
@@ -744,7 +762,7 @@ function saveExam() {
     body: JSON.stringify({
       title: title,
       timeLimit: timeLimit,
-      maxStudents: maxStudents,
+      allowedStudents: allowedStudents,
       questionMode: questionMode,
       timePerQuestion: timePerQuestion,
       questions: questions

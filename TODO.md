@@ -1,22 +1,8 @@
-# Attendance Feature Implementation
+# TODO - Allowed Student List Update
 
-## Steps
-
-- [x] 1. Create `data/attendance.json` (empty array)
-- [x] 2. Update `server.js` — add attendance API endpoints + platform field in submissions
-- [x] 3. Update `public/student/index.html` — add mode selection screen + attendance screens
-- [x] 4. Update `public/student/student.js` — add attendance functions + platform in submit
-- [x] 5. Update `public/teacher/index.html` — add Attendance tab + panel + modals
-- [x] 6. Update `public/teacher/teacher.js` — add attendance functions + platform badge in results
-
-## Features Implemented
-- ✅ Mode selection screen: "Take Exam" vs "Attendance Check-In"
-- ✅ No double entry: server blocks same firstName+lastName from timing in twice per session
-- ✅ Platform badge (📱 App / 🌐 Browser) saved in both exam submissions and attendance records
-- ✅ Time In / Time Out with duration calculation
-- ✅ Learning summary (ledger) required on Time Out (min 10 chars)
-- ✅ Character counter on learning summary textarea
-- ✅ Export attendance to Excel (Name, Platform, Time In, Time Out, Duration, Learning Summary)
-- ✅ Teacher: Create/Activate/Deactivate/Delete sessions
-- ✅ Teacher: View records modal with full details
-- ✅ Auto-refresh attendance tab every 4 seconds
+- [x] Update teacher exam builder UI to replace max students with allowed student list input
+- [x] Update teacher frontend logic to read/write allowed student list in exam create/edit/save flows
+- [x] Update backend exam APIs to store and return allowed student list
+- [ ] Update student portal UI/logic to use code + name selection (remove student ID requirement)
+- [ ] Update backend student join/submit validation to enforce allowed list and single-attempt rules
+- [ ] Run focused validation checks for create/edit/join/submit flows

@@ -367,9 +367,19 @@ app.get('/api/exams/:id', (req, res) => {
 
 // Create new exam
 app.post('/api/exam/create', (req, res) => {
-    const { title, timeLimit, questions, maxStudents, questionMode, timePerQuestion } = req.body;
+    const { title, timeLimit, questions, allowedStudents, questionMode, timePerQuestion } = req.body;
     if (!title || !questions || questions.length === 0)
         return res.status(400).json({ error: 'Exam title and at least one question are required.' });
+
+    const normalizedAllowedStudents = Array.isArray(allowedStudents)
+        ? [...new Set(
+            allowedStudents
+                .map(s => String(s || '').trim().toUpperCase())
+                .filter(s => s.length > 0)
+          )]
+        : [];
+    if (normalizedAllowedStudents.length === 0)
+        return res.status(400).json({ error: 'Please provide at least one allowed student.' });
 
     const exams = readExams();
     if (exams.find(e => e.title.toLowerCase() === title.trim().toLowerCase()))
@@ -379,7 +389,8 @@ app.post('/api/exam/create', (req, res) => {
         id: Date.now().toString(),
         title: title.trim(),
         timeLimit: parseInt(timeLimit) || 60,
-        maxStudents: parseInt(maxStudents) || 0, // 0 means no limit
+        maxStudents: 0, // deprecated, replaced by allowedStudents list
+        allowedStudents: normalizedAllowedStudents,
         questionMode: questionMode || 'scroll',          // 'scroll' | 'one-by-one'
         timePerQuestion: parseInt(timePerQuestion) || 30, // seconds per question (one-by-one mode)
         questions,
@@ -409,7 +420,8 @@ app.post('/api/exams/:id/duplicate', (req, res) => {
         id: Date.now().toString(),
         title: newTitle,
         timeLimit: exam.timeLimit,
-        maxStudents: exam.maxStudents || 0,
+        maxStudents: 0,
+        allowedStudents: Array.isArray(exam.allowedStudents) ? [...exam.allowedStudents] : [],
         questionMode: exam.questionMode || 'scroll',
         timePerQuestion: exam.timePerQuestion || 30,
         questions: JSON.parse(JSON.stringify(exam.questions)), // deep copy
@@ -434,9 +446,19 @@ app.post('/api/exams/:id/toggle', (req, res) => {
 
 // Update existing exam
 app.put('/api/exams/:id', (req, res) => {
-    const { title, timeLimit, questions, maxStudents, questionMode, timePerQuestion } = req.body;
+    const { title, timeLimit, questions, allowedStudents, questionMode, timePerQuestion } = req.body;
     if (!title || !questions || questions.length === 0)
         return res.status(400).json({ error: 'Exam title and at least one question are required.' });
+
+    const normalizedAllowedStudents = Array.isArray(allowedStudents)
+        ? [...new Set(
+            allowedStudents
+                .map(s => String(s || '').trim().toUpperCase())
+                .filter(s => s.length > 0)
+          )]
+        : [];
+    if (normalizedAllowedStudents.length === 0)
+        return res.status(400).json({ error: 'Please provide at least one allowed student.' });
 
     const exams = readExams();
     const idx = exams.findIndex(e => e.id === req.params.id);
@@ -449,7 +471,8 @@ app.put('/api/exams/:id', (req, res) => {
         ...exams[idx], 
         title: title.trim(), 
         timeLimit: parseInt(timeLimit) || 60, 
-        maxStudents: parseInt(maxStudents) || 0,
+        maxStudents: 0,
+        allowedStudents: normalizedAllowedStudents,
         questionMode: questionMode || 'scroll',
         timePerQuestion: parseInt(timePerQuestion) || 30,
         questions, 
@@ -664,6 +687,7 @@ app.get('/api/exam/code/:code', (req, res) => {
         timeLimit: exam.timeLimit,
         totalQuestions: exam.questions.length,
         maxStudents: exam.maxStudents,
+        allowedStudents: Array.isArray(exam.allowedStudents) ? exam.allowedStudents : [],
         currentOnline: currentOnline,
         remainingSlots: exam.maxStudents > 0 ? Math.max(0, exam.maxStudents - currentOnline) : null,
         questionMode: exam.questionMode || 'scroll',

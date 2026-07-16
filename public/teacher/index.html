@@ -188,14 +188,14 @@
         </div>
         <div class="form-row" style="margin-top:16px">
           <div class="form-group" style="flex:2">
-            <label>Maximum Students (optional)</label>
-            <input type="number" id="examMaxStudents" value="0" min="0" max="1000" placeholder="0 = no limit"/>
-            <div class="field-hint">Set a limit to prevent more than X students from taking this exam. Leave as 0 for no limit.</div>
+            <label>Allowed Students (required)</label>
+            <textarea id="examAllowedStudents" rows="8" placeholder="Enter one student per line&#10;Example:&#10;DELA CRUZ, JUAN&#10;SANTOS, MARIA&#10;REYES, ANGELO" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.9rem;font-family:inherit;color:#1e293b;resize:vertical"></textarea>
+            <div class="field-hint">Students will enter the code, then select their name from this list. Format each line as <strong>LAST NAME, FIRST NAME</strong>.</div>
           </div>
           <div class="form-group" style="flex:1;display:flex;align-items:flex-end">
             <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;width:100%">
-              <div style="font-size:0.75rem;color:#166534;text-transform:uppercase;font-weight:600">Current Usage</div>
-              <div id="currentUsageDisplay" style="font-size:1.5rem;font-weight:700;color:#15803d">0 / 0</div>
+              <div style="font-size:0.75rem;color:#166534;text-transform:uppercase;font-weight:600">Allowed Count</div>
+              <div id="currentUsageDisplay" style="font-size:1.5rem;font-weight:700;color:#15803d">0 students</div>
             </div>
           </div>
         </div>
