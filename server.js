@@ -367,7 +367,7 @@ app.get('/api/exams/:id', (req, res) => {
 
 // Create new exam
 app.post('/api/exam/create', (req, res) => {
-    const { title, timeLimit, questions, allowedStudents, questionMode, timePerQuestion } = req.body;
+    const { title, timeLimit, questions, allowedStudents, questionMode, timePerQuestion, violationPolicy, violationDeduction } = req.body;
     if (!title || !questions || questions.length === 0)
         return res.status(400).json({ error: 'Exam title and at least one question are required.' });
 
@@ -385,6 +385,11 @@ app.post('/api/exam/create', (req, res) => {
     if (exams.find(e => e.title.toLowerCase() === title.trim().toLowerCase()))
         return res.status(400).json({ error: 'An exam with this code already exists. Use a different title.' });
 
+    const normalizedViolationPolicy = ['deduct_score', 'auto_submit_3', 'teacher_decides'].includes(violationPolicy)
+        ? violationPolicy
+        : 'teacher_decides';
+    const normalizedViolationDeduction = Math.max(0, parseInt(violationDeduction) || 1);
+
     const newExam = {
         id: Date.now().toString(),
         title: title.trim(),
@@ -393,6 +398,8 @@ app.post('/api/exam/create', (req, res) => {
         allowedStudents: normalizedAllowedStudents,
         questionMode: questionMode || 'scroll',          // 'scroll' | 'one-by-one'
         timePerQuestion: parseInt(timePerQuestion) || 30, // seconds per question (one-by-one mode)
+        violationPolicy: normalizedViolationPolicy,       // 'deduct_score' | 'auto_submit_3' | 'teacher_decides'
+        violationDeduction: normalizedViolationDeduction, // points deducted per violation (for deduct_score)
         questions,
         active: false,
         createdAt: new Date().toISOString()
@@ -424,6 +431,8 @@ app.post('/api/exams/:id/duplicate', (req, res) => {
         allowedStudents: Array.isArray(exam.allowedStudents) ? [...exam.allowedStudents] : [],
         questionMode: exam.questionMode || 'scroll',
         timePerQuestion: exam.timePerQuestion || 30,
+        violationPolicy: exam.violationPolicy || 'teacher_decides',
+        violationDeduction: Math.max(0, parseInt(exam.violationDeduction) || 1),
         questions: JSON.parse(JSON.stringify(exam.questions)), // deep copy
         active: false,
         createdAt: new Date().toISOString()
@@ -446,7 +455,7 @@ app.post('/api/exams/:id/toggle', (req, res) => {
 
 // Update existing exam
 app.put('/api/exams/:id', (req, res) => {
-    const { title, timeLimit, questions, allowedStudents, questionMode, timePerQuestion } = req.body;
+    const { title, timeLimit, questions, allowedStudents, questionMode, timePerQuestion, violationPolicy, violationDeduction } = req.body;
     if (!title || !questions || questions.length === 0)
         return res.status(400).json({ error: 'Exam title and at least one question are required.' });
 
@@ -467,6 +476,11 @@ app.put('/api/exams/:id', (req, res) => {
     const dup = exams.find((e, i) => i !== idx && e.title.toLowerCase() === title.trim().toLowerCase());
     if (dup) return res.status(400).json({ error: 'Another exam with this code already exists.' });
 
+    const normalizedViolationPolicy = ['deduct_score', 'auto_submit_3', 'teacher_decides'].includes(violationPolicy)
+        ? violationPolicy
+        : (exams[idx].violationPolicy || 'teacher_decides');
+    const normalizedViolationDeduction = Math.max(0, parseInt(violationDeduction) || exams[idx].violationDeduction || 1);
+
     exams[idx] = { 
         ...exams[idx], 
         title: title.trim(), 
@@ -475,6 +489,8 @@ app.put('/api/exams/:id', (req, res) => {
         allowedStudents: normalizedAllowedStudents,
         questionMode: questionMode || 'scroll',
         timePerQuestion: parseInt(timePerQuestion) || 30,
+        violationPolicy: normalizedViolationPolicy,
+        violationDeduction: normalizedViolationDeduction,
         questions, 
         updatedAt: new Date().toISOString() 
     };
@@ -591,22 +607,39 @@ app.post('/api/violations/report', (req, res) => {
     const exams = readExams();
     const exam = exams.find(e => e.id === examId);
     const key = `${examId}_${studentId}`;
+    const policy = exam && exam.violationPolicy ? exam.violationPolicy : 'teacher_decides';
+    const deduction = exam && exam.violationDeduction ? parseInt(exam.violationDeduction) : 1;
+
     if (!pendingViolations[key]) {
         pendingViolations[key] = {
             studentId, firstName, lastName, examId,
             examTitle: exam ? exam.title : '',
             violationType: violationType || 'unknown',
             violationCount: 1,
+            violationPolicy: policy,
+            violationDeduction: Math.max(0, deduction || 1),
             timestamp: new Date().toISOString(),
-            status: 'pending'
+            status: policy === 'auto_submit_3' ? 'allowed' : 'pending'
         };
     } else {
         pendingViolations[key].violationCount++;
         pendingViolations[key].violationType = violationType || pendingViolations[key].violationType;
+        pendingViolations[key].violationPolicy = policy;
+        pendingViolations[key].violationDeduction = Math.max(0, deduction || 1);
         pendingViolations[key].timestamp = new Date().toISOString();
-        pendingViolations[key].status = 'pending'; // reset to pending for teacher to re-decide
+        pendingViolations[key].status = policy === 'teacher_decides' ? 'pending' : 'allowed';
     }
-    res.json({ success: true });
+
+    if (policy === 'auto_submit_3' && pendingViolations[key].violationCount >= 3) {
+        pendingViolations[key].status = 'force_submit';
+    }
+
+    res.json({
+        success: true,
+        violationCount: pendingViolations[key].violationCount,
+        violationPolicy: policy,
+        status: pendingViolations[key].status
+    });
 });
 
 // Teacher gets all pending violations
@@ -629,8 +662,20 @@ app.get('/api/violations/check', (req, res) => {
     const { studentId, examId } = req.query;
     const key = `${examId}_${studentId}`;
     const v = pendingViolations[key];
-    if (!v) return res.json({ status: 'none' });
-    res.json({ status: v.status });
+    if (!v) {
+        const exam = readExams().find(e => e.id === examId);
+        return res.json({
+            status: 'none',
+            violationCount: 0,
+            violationPolicy: exam && exam.violationPolicy ? exam.violationPolicy : 'teacher_decides'
+        });
+    }
+    res.json({
+        status: v.status,
+        violationCount: v.violationCount || 0,
+        violationPolicy: v.violationPolicy || 'teacher_decides',
+        violationDeduction: v.violationDeduction || 1
+    });
 });
 
 app.get('/api/students/live', (req, res) => {
@@ -763,7 +808,7 @@ app.post('/api/submit', (req, res) => {
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { return res.status(400).json({ error: 'Invalid data.' }); } }
 
-    const { firstName, lastName, studentId, examId, answers, answerMap, autoSubmitted, violation } = body;
+    const { firstName, lastName, studentId, examId, answers, answerMap, autoSubmitted, violation, violationCount } = body;
     if (!firstName || !lastName || !studentId || !examId)
         return res.status(400).json({ error: 'Missing student information.' });
 
@@ -781,15 +826,26 @@ app.post('/api/submit', (req, res) => {
     }
 
     // Use answerMap if provided (questions were shuffled for this student)
-    const { score, totalItems, percentage, gradedAnswers } = gradeExam(exam, answers || [], answerMap || null);
+    const { score, totalItems, gradedAnswers } = gradeExam(exam, answers || [], answerMap || null);
+
+    const policy = exam.violationPolicy || 'teacher_decides';
+    const deductionPerViolation = Math.max(0, parseInt(exam.violationDeduction) || 1);
+    const reportedViolationCount = Math.max(0, parseInt(violationCount) || 0);
+    const finalScore = policy === 'deduct_score'
+        ? Math.max(0, score - (deductionPerViolation * reportedViolationCount))
+        : score;
+    const finalPercentage = totalItems > 0 ? Math.round((finalScore / totalItems) * 100) : 0;
 
     submissions.push({
         id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
         examId: exam.id, examTitle: exam.title,
         firstName: firstName.trim(), lastName: lastName.trim(), studentId: studentId.trim(),
-        score, totalItems, percentage, answers: gradedAnswers,
+        score: finalScore, totalItems, percentage: finalPercentage, answers: gradedAnswers,
         autoSubmitted: autoSubmitted === true,
-        violation: violation === true,
+        violation: violation === true || reportedViolationCount > 0,
+        violationCount: reportedViolationCount,
+        violationPolicy: policy,
+        violationDeduction: deductionPerViolation,
         platform: body.platform || 'browser',  // 'app' | 'browser'
         submittedAt: new Date().toISOString()
     });
@@ -803,7 +859,7 @@ app.post('/api/submit/beacon', (req, res) => {
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { return res.status(400).end(); } }
 
-    const { firstName, lastName, studentId, examId, answers, answerMap, violation } = body;
+    const { firstName, lastName, studentId, examId, answers, answerMap, violation, violationCount } = body;
     if (!firstName || !lastName || !studentId || !examId) return res.status(400).end();
 
     const exams = readExams();
@@ -819,14 +875,25 @@ app.post('/api/submit/beacon', (req, res) => {
     }
 
     // Use answerMap if provided (questions were shuffled for this student)
-    const { score, totalItems, percentage, gradedAnswers } = gradeExam(exam, answers || [], answerMap || null);
+    const { score, totalItems, gradedAnswers } = gradeExam(exam, answers || [], answerMap || null);
+    const policy = exam.violationPolicy || 'teacher_decides';
+    const deductionPerViolation = Math.max(0, parseInt(exam.violationDeduction) || 1);
+    const reportedViolationCount = Math.max(0, parseInt(violationCount) || 0);
+    const finalScore = policy === 'deduct_score'
+        ? Math.max(0, score - (deductionPerViolation * reportedViolationCount))
+        : score;
+    const finalPercentage = totalItems > 0 ? Math.round((finalScore / totalItems) * 100) : 0;
+
     submissions.push({
         id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
         examId: exam.id, examTitle: exam.title,
         firstName: firstName.trim(), lastName: lastName.trim(), studentId: studentId.trim(),
-        score, totalItems, percentage, answers: gradedAnswers,
+        score: finalScore, totalItems, percentage: finalPercentage, answers: gradedAnswers,
         autoSubmitted: true,
-        violation: violation === true,
+        violation: violation === true || reportedViolationCount > 0,
+        violationCount: reportedViolationCount,
+        violationPolicy: policy,
+        violationDeduction: deductionPerViolation,
         platform: body.platform || 'browser',
         submittedAt: new Date().toISOString()
     });

@@ -233,8 +233,11 @@ function newExam() {
   document.getElementById('examAllowedStudents').value = '';
   document.getElementById('examQuestionMode').value = 'scroll';
   document.getElementById('examTimePerQuestion').value = '30';
+  document.getElementById('examViolationPolicy').value = 'teacher_decides';
+  document.getElementById('examViolationDeduction').value = '1';
   var tpqGroup = document.getElementById('timePerQuestionGroup');
   if (tpqGroup) tpqGroup.style.display = 'none';
+  toggleViolationPolicyUI();
   updateAllowedCountDisplay();
   document.getElementById('builderTitle').textContent = 'Create New Exam';
   document.getElementById('builderSub').textContent = 'Fill in the details and add questions below';
@@ -247,6 +250,12 @@ function toggleQuestionMode() {
   var mode = document.getElementById('examQuestionMode').value;
   var tpqGroup = document.getElementById('timePerQuestionGroup');
   if (tpqGroup) tpqGroup.style.display = mode === 'one-by-one' ? 'flex' : 'none';
+}
+
+function toggleViolationPolicyUI() {
+  var policy = document.getElementById('examViolationPolicy').value;
+  var grp = document.getElementById('violationDeductionGroup');
+  if (grp) grp.style.display = policy === 'deduct_score' ? 'block' : 'none';
 }
 
 function editExam(id) {
@@ -267,8 +276,11 @@ function editExam(id) {
       document.getElementById('examAllowedStudents').value = (exam.allowedStudents || []).join('\n');
       document.getElementById('examQuestionMode').value = exam.questionMode || 'scroll';
       document.getElementById('examTimePerQuestion').value = exam.timePerQuestion || 30;
+      document.getElementById('examViolationPolicy').value = exam.violationPolicy || 'teacher_decides';
+      document.getElementById('examViolationDeduction').value = exam.violationDeduction || 1;
       var tpqGroup = document.getElementById('timePerQuestionGroup');
       if (tpqGroup) tpqGroup.style.display = (exam.questionMode === 'one-by-one') ? 'flex' : 'none';
+      toggleViolationPolicyUI();
       updateAllowedCountDisplay();
       document.getElementById('builderTitle').textContent = 'Edit Exam';
       document.getElementById('builderSub').textContent = 'Code: ' + exam.title;
@@ -724,12 +736,17 @@ function saveExam() {
   var allowedStudents = parseAllowedStudentsInput(document.getElementById('examAllowedStudents').value);
   var questionMode = document.getElementById('examQuestionMode').value || 'scroll';
   var timePerQuestion = parseInt(document.getElementById('examTimePerQuestion').value) || 30;
+  var violationPolicy = document.getElementById('examViolationPolicy').value || 'teacher_decides';
+  var violationDeduction = parseInt(document.getElementById('examViolationDeduction').value) || 1;
 
   if (!title) { showToast('Please enter an exam title.', 'error'); return; }
   if (allowedStudents.length === 0) { showToast('Please enter at least one allowed student.', 'error'); return; }
   if (!timeLimit || timeLimit < 1) { showToast('Please enter a valid time limit.', 'error'); return; }
   if (questionMode === 'one-by-one' && (timePerQuestion < 5 || timePerQuestion > 600)) {
     showToast('Time per question must be between 5 and 600 seconds.', 'error'); return;
+  }
+  if (violationPolicy === 'deduct_score' && (violationDeduction < 0 || violationDeduction > 100)) {
+    showToast('Violation deduction must be between 0 and 100.', 'error'); return;
   }
   if (questions.length === 0) { showToast('Please add at least one question.', 'error'); return; }
 
@@ -765,6 +782,8 @@ function saveExam() {
       allowedStudents: allowedStudents,
       questionMode: questionMode,
       timePerQuestion: timePerQuestion,
+      violationPolicy: violationPolicy,
+      violationDeduction: violationDeduction,
       questions: questions
     })
   })
@@ -1517,6 +1536,7 @@ window.deleteAttendanceSession = deleteAttendanceSession;
 window.deleteAttendanceRecord = deleteAttendanceRecord;
 window.loadViolations = loadViolations;
 window.toggleQuestionMode = toggleQuestionMode;
+window.toggleViolationPolicyUI = toggleViolationPolicyUI;
 window.openJsonImportModal = openJsonImportModal;
 window.closeJsonImportModal = closeJsonImportModal;
 window.handleJsonFileUpload = handleJsonFileUpload;

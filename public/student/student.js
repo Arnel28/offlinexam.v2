@@ -10,6 +10,9 @@ var remainingSeconds = 0;
 var _isSubmitting = false;
 var violationCount = 0;
 var violationActive = false;
+var violationPolicy = 'teacher_decides';
+var fullscreenRetryTimer = null;
+var violationPollTimer = null;
 
 // one-by-one mode state
 var oboIndex = 0;
@@ -156,7 +159,11 @@ function startExam() {
         return;
       }
 
+      violationPolicy = examData.violationPolicy || 'teacher_decides';
       initializeExamRuntime();
+      requestExamFullscreen();
+      startFullscreenEnforcer();
+
       if ((examData.questionMode || 'scroll') === 'one-by-one') {
         showScreen('oboScreen');
         renderOboQuestion();
@@ -171,6 +178,33 @@ function startExam() {
     });
 }
 window.startExam = startExam;
+
+function requestExamFullscreen() {
+  var docEl = document.documentElement;
+  if (!docEl) return;
+  var fsElement = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+  if (fsElement) return;
+
+  var req = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
+  if (req) {
+    try { req.call(docEl); } catch (e) {}
+  }
+}
+
+function startFullscreenEnforcer() {
+  if (fullscreenRetryTimer) clearInterval(fullscreenRetryTimer);
+  fullscreenRetryTimer = setInterval(function () {
+    if (!examData || _isSubmitting) return;
+    requestExamFullscreen();
+  }, 1500);
+}
+
+function stopFullscreenEnforcer() {
+  if (fullscreenRetryTimer) {
+    clearInterval(fullscreenRetryTimer);
+    fullscreenRetryTimer = null;
+  }
+}
 
 function initializeExamRuntime() {
   examStartedAt = Date.now();
@@ -363,6 +397,7 @@ window.doSubmit = doSubmit;
 
 function submitExam(autoSubmitted, violationFlag) {
   if (_isSubmitting) return;
+  stopFullscreenEnforcer();
   _isSubmitting = true;
   clearInterval(examTimerInterval);
   clearInterval(oboQuestionTimer);
@@ -379,6 +414,7 @@ function submitExam(autoSubmitted, violationFlag) {
       answerMap: answerMap,
       autoSubmitted: !!autoSubmitted,
       violation: !!violationFlag,
+      violationCount: violationCount,
       platform: window.IS_NATIVE_APP ? 'app' : 'browser'
     })
   })
@@ -419,14 +455,20 @@ function showViolationOverlay(type) {
   var examScreen = byId('examScreen');
   var oboScreen = byId('oboScreen');
 
-  if (msg) msg.textContent = type === 'visibility' ? 'You switched tabs or minimized the app.' : 'Suspicious behavior detected.';
+  if (msg) {
+    if (type === 'visibility') msg.textContent = 'Violation detected: You switched tabs or minimized the app.';
+    else if (type === 'fullscreen_exit') msg.textContent = 'Violation detected: Fullscreen mode was exited.';
+    else msg.textContent = 'Violation detected: Suspicious behavior was found.';
+  }
   if (cnt) cnt.textContent = String(violationCount);
   if (overlay) overlay.classList.add('show');
   if (examScreen) examScreen.classList.add('violation-blur');
   if (oboScreen) oboScreen.classList.add('violation-blur');
 
-  // Force submit after repeated violations
-  if (violationCount >= 2) {
+  updateViolationOverlayByPolicy();
+
+  // Auto-submit threshold only for configured policy
+  if (violationPolicy === 'auto_submit_3' && violationCount >= 3) {
     submitExam(true, true);
   }
 }
@@ -441,6 +483,27 @@ function clearViolationOverlay() {
   if (oboScreen) oboScreen.classList.remove('violation-blur');
 }
 
+function updateViolationOverlayByPolicy() {
+  var waitLabel = byId('violationWaitLabel');
+  var btn = byId('violationContinueBtn');
+  if (!btn || !waitLabel) return;
+
+  if (violationPolicy === 'teacher_decides') {
+    btn.style.display = 'none';
+    waitLabel.textContent = 'Teacher is being notified';
+  } else {
+    btn.style.display = 'block';
+    waitLabel.textContent = 'You may continue the exam';
+  }
+}
+
+function continueAfterViolation() {
+  if (violationPolicy === 'teacher_decides') return;
+  clearViolationOverlay();
+  requestExamFullscreen();
+}
+window.continueAfterViolation = continueAfterViolation;
+
 function attachProctoringHandlers() {
   document.addEventListener('visibilitychange', function () {
     if (!examData || _isSubmitting) return;
@@ -449,8 +512,45 @@ function attachProctoringHandlers() {
       showViolationOverlay('visibility');
     } else {
       clearViolationOverlay();
+      requestExamFullscreen();
     }
   });
+
+  document.addEventListener('fullscreenchange', function () {
+    if (!examData || _isSubmitting) return;
+    var fsElement = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+    if (!fsElement) {
+      reportViolation('fullscreen_exit');
+      showViolationOverlay('fullscreen_exit');
+      requestExamFullscreen();
+    }
+  });
+
+  if (violationPollTimer) clearInterval(violationPollTimer);
+  violationPollTimer = setInterval(function () {
+    if (!examData || _isSubmitting || !studentInfo.studentId) return;
+    fetch('/api/violations/check?studentId=' + encodeURIComponent(studentInfo.studentId) + '&examId=' + encodeURIComponent(examData.id))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data) return;
+        if (typeof data.violationCount === 'number') {
+          violationCount = Math.max(violationCount, data.violationCount);
+          var cnt = byId('violationCountDisplay');
+          if (cnt) cnt.textContent = String(violationCount);
+        }
+        if (data.violationPolicy) {
+          violationPolicy = data.violationPolicy;
+          updateViolationOverlayByPolicy();
+        }
+        if (data.status === 'allowed') {
+          clearViolationOverlay();
+          requestExamFullscreen();
+        } else if (data.status === 'force_submit') {
+          submitExam(true, true);
+        }
+      })
+      .catch(function () {});
+  }, 1500);
 
   window.addEventListener('beforeunload', function () {
     if (!examData || _isSubmitting) return;
@@ -462,6 +562,7 @@ function attachProctoringHandlers() {
       answers: answers,
       answerMap: answerMap,
       violation: violationActive === true,
+      violationCount: violationCount,
       platform: window.IS_NATIVE_APP ? 'app' : 'browser'
     }));
   });
