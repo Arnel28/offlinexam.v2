@@ -1,4 +1,4 @@
-0<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -214,6 +214,24 @@
             <label>Time per Question (seconds)</label>
             <input type="number" id="examTimePerQuestion" value="30" min="5" max="600"/>
             <div class="field-hint">⏱ Timer auto-advances to the next question when it hits 0. Students can click <strong>Next →</strong> early after answering.</div>
+          </div>
+        </div>
+
+        <!-- ── VIOLATION POLICY ── -->
+        <div class="form-row" style="margin-top:16px">
+          <div class="form-group" style="flex:2">
+            <label>Violation Policy</label>
+            <select id="examViolationPolicy" onchange="toggleViolationPolicyUI()" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:.9rem;font-family:inherit;color:#1e293b;background:#fff;cursor:pointer">
+              <option value="deduct_score">➖ Every violation deducts score</option>
+              <option value="auto_submit_3">🚫 Auto-submit test when violations reach 3</option>
+              <option value="teacher_decides" selected>👩‍🏫 Notify teacher each violation; teacher decides continue or submit</option>
+            </select>
+            <div class="field-hint">Choose how the system handles violations during an exam.</div>
+          </div>
+          <div class="form-group" id="violationDeductionGroup" style="flex:1">
+            <label>Deduction per Violation</label>
+            <input type="number" id="examViolationDeduction" value="1" min="0" max="100"/>
+            <div class="field-hint">Only applies to <strong>deduct score</strong> policy.</div>
           </div>
         </div>
       </div>

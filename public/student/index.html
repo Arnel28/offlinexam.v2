@@ -331,9 +331,10 @@ input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,9
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px">
       <div style="width:10px;height:10px;border-radius:50%;background:#dc2626;animation:vPulse 1s infinite"></div>
-      <span style="font-size:.82rem;color:#64748b;font-weight:600">Teacher is being notified</span>
+      <span id="violationWaitLabel" style="font-size:.82rem;color:#64748b;font-weight:600">Teacher is being notified</span>
     </div>
     <div style="margin-top:12px;font-size:.75rem;color:#94a3b8">Violation count: <strong id="violationCountDisplay">1</strong></div>
+    <button id="violationContinueBtn" class="btn-return" onclick="continueAfterViolation()" style="display:none;margin-top:14px">Continue Exam</button>
   </div>
 </div>
 <style>@keyframes vPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)}}</style>
